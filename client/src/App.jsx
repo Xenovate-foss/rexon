@@ -19,7 +19,7 @@ import {
   EthernetPort,
 } from "lucide-react";
 import Console from "./pages/Console.jsx";
-//import FileManager from "./pages/FileManager.jsx";
+import FileManager from "./pages/FileManager.jsx";
 
 const Plugins = () => (
   <div>
@@ -95,6 +95,7 @@ const SidebarContent = () => {
 
   const menuItems = [
     { name: "Console", icon: <Terminal />, path: "console" },
+    { name: "File Manager", icon: <FolderClosed />, path: "file-manager" },
     { name: "Plugins", icon: <Blocks />, path: "plugins" },
     { name: "Worlds", icon: <Earth />, path: "worlds" },
     { name: "Port forward", icon: <EthernetPort />, path: "port-forward" },
@@ -212,7 +213,7 @@ const SidebarContent = () => {
             <Routes>
               <Route path="/" element={<Console />} />
               <Route path="/console" element={<Console />} />
-              <Route path="/file-manager" element={<FileManager />} />
+              {/* <Route path="/file-manager" element={<FileManager />} /> */}
               <Route path="/plugins" element={<Plugins />} />
               <Route path="/worlds" element={<Worlds />} />
               <Route path="/port-forward" element={<PortForward />} />
