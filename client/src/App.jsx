@@ -19,7 +19,19 @@ import {
   EthernetPort,
 } from "lucide-react";
 import Console from "./pages/Console.jsx";
-import FileManager from "./pages/FileManager.jsx";
+import FileManager from "./pages/FileManager.jsx"
+// Page Components
+
+/*const FileManager = () => (
+  <div>
+    <p className="text-gray-700">Browse, upload, and manage your files</p>
+    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="p-3 border border-gray-200 rounded">Documents</div>
+      <div className="p-3 border border-gray-200 rounded">Images</div>
+      <div className="p-3 border border-gray-200 rounded">Downloads</div>
+    </div>
+  </div>
+);*/
 
 const Plugins = () => (
   <div>
@@ -86,12 +98,28 @@ const Settings = () => (
   </div>
 );
 
+const Home = () => (
+  <div>
+    <p className="text-gray-700">Welcome to your dashboard</p>
+    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="p-4 border border-gray-200 rounded">
+        <h3 className="font-medium mb-2">System Status</h3>
+        <p className="text-green-500">All systems operational</p>
+      </div>
+      <div className="p-4 border border-gray-200 rounded">
+        <h3 className="font-medium mb-2">Recent Activity</h3>
+        <p className="text-gray-500">No recent activities</p>
+      </div>
+    </div>
+  </div>
+);
+
 const SidebarContent = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const currentPath = location.pathname.substring(1) || "console";
+  const currentPath = location.pathname.substring(1) || "home";
 
   const menuItems = [
     { name: "Console", icon: <Terminal />, path: "console" },
@@ -211,9 +239,9 @@ const SidebarContent = () => {
           </div>
           <div className="bg-white p-4 sm:p-6 rounded-lg shadow">
             <Routes>
-              <Route path="/" element={<Console />} />
+              <Route path="/" element={<Home />} />
               <Route path="/console" element={<Console />} />
-              {/* <Route path="/file-manager" element={<FileManager />} /> */}
+              <Route path="/file-manager" element={<FileManager />} />
               <Route path="/plugins" element={<Plugins />} />
               <Route path="/worlds" element={<Worlds />} />
               <Route path="/port-forward" element={<PortForward />} />

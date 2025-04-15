@@ -1,4 +1,4 @@
-import Xterm from "../components/Terminal.jsx";
+import Xterm from "../components/Terminal";
 import React, { useState } from "react";
 
 export default function Console() {
