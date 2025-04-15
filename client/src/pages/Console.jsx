@@ -2,13 +2,41 @@ import Xterm from "../components/Terminal.jsx";
 import React, { useState } from "react";
 
 export default function Console() {
+  const [isServerOnline, setIsServerOnline] = useState(false);
+  
   return (
-    <div className="grid grid-row-1 sm:grid-flow-col sm:grid-row-2 gap-2">
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <div>
+        <div className="flex">
+          <button 
+            className="text-white px-4 py-2 m-2 bg-blue-800 shadow-sm rounded-md hover:bg-blue-600" 
+            disabled={isServerOnline}
+          >
+            Start
+          </button>
+          <button 
+            className="text-white px-4 py-2 m-2 bg-red-800 shadow-sm rounded-md hover:bg-red-600" 
+            disabled={!isServerOnline}
+          >
+            Stop
+          </button>
+          <button 
+            className="text-white px-4 py-2 m-2 bg-yellow-800 shadow-sm rounded-md hover:bg-yellow-600" 
+            disabled={!isServerOnline}
+          >
+            Restart
+          </button>
+          <button 
+            className="text-white px-4 py-2 m-2 bg-red-800 shadow-sm rounded-md hover:bg-red-600" 
+            disabled={!isServerOnline}
+          >
+            Kill
+          </button>
+        </div>
         <Xterm />
       </div>
-      <div className="bg-black text-white w-auto h-auto rounded-sm p-2 px-8 mt-4 m-2">
-        <h2 className="text-medium">Info</h2>
+      <div className="bg-black mt-15 text-white rounded-sm p-4 m-2">
+        <h2 className="text-lg font-medium">Info</h2>
       </div>
     </div>
   );
