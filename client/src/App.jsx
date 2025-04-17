@@ -17,11 +17,14 @@ import {
   ChevronRight,
   ChevronLeft,
   EthernetPort,
+  Grid2x2Plus,
 } from "lucide-react";
-import Console from "./pages/Console.jsx";
-import FileManager from "./pages/FileManager.jsx"
-// Page Components
-
+import Console from "./pages/Console";
+import FileManager from "./pages/FileManager";
+import Plugins from "./pages/Plugins";
+import PluginExplorer from "./components/PluginExplorer";
+import Worlds from "./pages/Worlds";
+import Settings from "./pages/Settings";
 /*const FileManager = () => (
   <div>
     <p className="text-gray-700">Browse, upload, and manage your files</p>
@@ -32,33 +35,6 @@ import FileManager from "./pages/FileManager.jsx"
     </div>
   </div>
 );*/
-
-const Plugins = () => (
-  <div>
-    <p className="text-gray-700">Install and manage system plugins</p>
-    <div className="mt-4 space-y-2">
-      <div className="flex justify-between p-3 border border-gray-200 rounded">
-        <span>Security Scanner</span>
-        <span className="text-green-500">Active</span>
-      </div>
-      <div className="flex justify-between p-3 border border-gray-200 rounded">
-        <span>Backup Manager</span>
-        <span className="text-green-500">Active</span>
-      </div>
-    </div>
-  </div>
-);
-
-const Worlds = () => (
-  <div>
-    <p className="text-gray-700">Manage your virtual environments</p>
-    <div className="mt-4 space-y-2">
-      <div className="p-3 border border-gray-200 rounded">Development</div>
-      <div className="p-3 border border-gray-200 rounded">Production</div>
-      <div className="p-3 border border-gray-200 rounded">Testing</div>
-    </div>
-  </div>
-);
 
 const PortForward = () => (
   <div>
@@ -78,42 +54,6 @@ const PortForward = () => (
   </div>
 );
 
-const Settings = () => (
-  <div>
-    <p className="text-gray-700">Configure application preferences</p>
-    <div className="mt-4 space-y-4">
-      <div className="flex items-center justify-between p-3 border border-gray-200 rounded">
-        <span>Dark Mode</span>
-        <div className="w-12 h-6 bg-gray-200 rounded-full relative">
-          <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full"></div>
-        </div>
-      </div>
-      <div className="flex items-center justify-between p-3 border border-gray-200 rounded">
-        <span>Notifications</span>
-        <div className="w-12 h-6 bg-blue-500 rounded-full relative">
-          <div className="absolute right-1 top-1 w-4 h-4 bg-white rounded-full"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
-const Home = () => (
-  <div>
-    <p className="text-gray-700">Welcome to your dashboard</p>
-    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="p-4 border border-gray-200 rounded">
-        <h3 className="font-medium mb-2">System Status</h3>
-        <p className="text-green-500">All systems operational</p>
-      </div>
-      <div className="p-4 border border-gray-200 rounded">
-        <h3 className="font-medium mb-2">Recent Activity</h3>
-        <p className="text-gray-500">No recent activities</p>
-      </div>
-    </div>
-  </div>
-);
-
 const SidebarContent = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -125,6 +65,7 @@ const SidebarContent = () => {
     { name: "Console", icon: <Terminal />, path: "console" },
     { name: "File Manager", icon: <FolderClosed />, path: "file-manager" },
     { name: "Plugins", icon: <Blocks />, path: "plugins" },
+    { name: "Plugin Explorer", icon: <Grid2x2Plus />, path: "plugin-explorer" },
     { name: "Worlds", icon: <Earth />, path: "worlds" },
     { name: "Port forward", icon: <EthernetPort />, path: "port-forward" },
     { name: "Settings", icon: <SettingsIcon />, path: "settings" },
@@ -234,18 +175,19 @@ const SidebarContent = () => {
             )}
             <h1 className="text-xl sm:text-2xl font-bold">
               {menuItems.find((item) => item.path === currentPath)?.name ||
-                "Home"}
+                currentPath.name}
             </h1>
           </div>
           <div className="bg-white p-4 sm:p-6 rounded-lg shadow">
             <Routes>
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={<Console />} />
               <Route path="/console" element={<Console />} />
               <Route path="/file-manager" element={<FileManager />} />
               <Route path="/plugins" element={<Plugins />} />
               <Route path="/worlds" element={<Worlds />} />
               <Route path="/port-forward" element={<PortForward />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/plugin-explorer" element={<PluginExplorer />} />
             </Routes>
           </div>
         </div>

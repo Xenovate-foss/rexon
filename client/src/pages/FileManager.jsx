@@ -17,6 +17,7 @@ import {
   Copy,
   Menu,
   ArrowLeft,
+  FolderSymlink,
 } from "lucide-react";
 
 // Enhanced file tree with nested structure and file contents
@@ -193,6 +194,9 @@ const FileContextMenu = ({
                 <Edit size={18} /> Edit
               </li>
             )}
+            <li className="px-4 py-3 hover:bg-gray-700 flex items-center gap-3 cursor-pointer">
+              <FolderSymlink size={18} /> Move
+            </li>
             <li className="px-4 py-3 hover:bg-gray-700 flex items-center gap-3 cursor-pointer">
               <Download size={18} /> Download
             </li>
