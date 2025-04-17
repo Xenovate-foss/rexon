@@ -143,7 +143,7 @@ const XTerminal = () => {
     );
 
     // Try multiple transport methods
-    socketRef.current = io("https://3m9wyg-3000.csb.app/", {
+    socketRef.current = io("https://wzpmff-3000.csb.app", {
       reconnectionDelayMax: 10000,
       reconnectionAttempts: 5,
       timeout: 10000,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   FolderClosed,
   FolderOpen,
@@ -18,118 +18,11 @@ import {
   Menu,
   ArrowLeft,
   FolderSymlink,
+  Plus,
+  Loader,
 } from "lucide-react";
 
-// Enhanced file tree with nested structure and file contents
-const initialFileTree = [
-  {
-    id: 1,
-    name: "server.jar",
-    fileType: "file",
-    extension: "jar",
-    size: "16.2 MB",
-    modifiedAt: "2025-04-10",
-    binary: true,
-  },
-  {
-    id: 2,
-    name: "plugins",
-    fileType: "folder",
-    children: [
-      {
-        id: 3,
-        name: "geyser.jar",
-        fileType: "file",
-        extension: "jar",
-        size: "8.4 MB",
-        modifiedAt: "2025-04-12",
-        binary: true,
-      },
-      {
-        id: 4,
-        name: "config.yml",
-        fileType: "file",
-        extension: "yml",
-        size: "3.2 KB",
-        modifiedAt: "2025-04-13",
-        content: `# Geyser Configuration File
-
-server:
-  address: 0.0.0.0
-  port: 19132
-  name: "Geyser Server"
-  motd: "Geyser Minecraft Server"
-  compress-packets: true
-  max-players: 100
-  
-remote:
-  address: 127.0.0.1
-  port: 25565
-  auth-type: online
-  
-# Authentication settings
-auth-type: floodgate`,
-      },
-      {
-        id: 5,
-        name: "data.db",
-        fileType: "file",
-        extension: "db",
-        size: "2.7 MB",
-        modifiedAt: "2025-04-10",
-        binary: true,
-      },
-    ],
-  },
-  { id: 6, name: "world", fileType: "folder", children: [] },
-  {
-    id: 7,
-    name: "server.properties",
-    fileType: "file",
-    extension: "properties",
-    size: "1.8 KB",
-    modifiedAt: "2025-04-11",
-    content: `# Minecraft server properties
-server-port=25565
-gamemode=survival
-difficulty=normal
-max-players=20
-view-distance=10
-resource-pack=
-spawn-protection=16
-online-mode=true
-allow-flight=false
-motd=A Minecraft Server
-enable-rcon=false
-level-seed=
-pvp=true
-generate-structures=true
-max-build-height=256`,
-  },
-  {
-    id: 8,
-    name: "logs",
-    fileType: "folder",
-    children: [
-      {
-        id: 9,
-        name: "latest.log",
-        fileType: "file",
-        extension: "log",
-        size: "356 KB",
-        modifiedAt: "2025-04-14",
-        content: `[14:25:12] [Server thread/INFO]: Starting minecraft server version 1.20.1
-[14:25:12] [Server thread/INFO]: Loading properties
-[14:25:12] [Server thread/INFO]: Default game type: SURVIVAL
-[14:25:12] [Server thread/INFO]: Generating keypair
-[14:25:13] [Server thread/INFO]: Starting Minecraft server on *:25565
-[14:25:13] [Server thread/INFO]: Preparing level "world"
-[14:25:14] [Server thread/INFO]: Preparing start region for dimension minecraft:overworld
-[14:25:16] [Server thread/INFO]: Done (3.245s)! For help, type "help"`,
-      },
-    ],
-  },
-];
+import axios from "axios";
 
 // Function to get icon based on file extension
 const getFileIcon = (extension) => {
@@ -140,11 +33,17 @@ const getFileIcon = (extension) => {
     case "jsx":
     case "ts":
     case "tsx":
-    case "py":
-    case "java":
-    case "html":
-    case "css":
       return <Code className="text-yellow-500" size={16} />;
+    case "py":
+      return <Code className="text-green-500" size={16} />;
+    case "java":
+      return <Code className="text-orange-500" size={16} />;
+    case "html":
+      return <Code className="text-red-500" size={16} />;
+    case "css":
+      return <Code className="text-blue-500" size={16} />;
+    case "json":
+      return <FileText className="text-yellow-400" size={16} />;
     case "properties":
     case "yml":
     case "yaml":
@@ -162,10 +61,12 @@ const FileContextMenu = ({
   y,
   onClose,
   onEdit,
+  onDelete,
+  onDownload,
   isMobile,
   item,
 }) => {
-  if (!isVisible) return null;
+  if (!isVisible || !item) return null;
 
   if (isMobile) {
     // Mobile context menu - full width at bottom
@@ -189,7 +90,10 @@ const FileContextMenu = ({
             {item.fileType === "file" && !item.binary && (
               <li
                 className="px-4 py-3 hover:bg-gray-700 flex items-center gap-3 cursor-pointer"
-                onClick={onEdit}
+                onClick={() => {
+                  onEdit(item);
+                  onClose();
+                }}
               >
                 <Edit size={18} /> Edit
               </li>
@@ -197,10 +101,22 @@ const FileContextMenu = ({
             <li className="px-4 py-3 hover:bg-gray-700 flex items-center gap-3 cursor-pointer">
               <FolderSymlink size={18} /> Move
             </li>
-            <li className="px-4 py-3 hover:bg-gray-700 flex items-center gap-3 cursor-pointer">
+            <li
+              className="px-4 py-3 hover:bg-gray-700 flex items-center gap-3 cursor-pointer"
+              onClick={() => {
+                onDownload(item);
+                onClose();
+              }}
+            >
               <Download size={18} /> Download
             </li>
-            <li className="px-4 py-3 hover:bg-gray-700 flex items-center gap-3 cursor-pointer text-red-400">
+            <li
+              className="px-4 py-3 hover:bg-gray-700 flex items-center gap-3 cursor-pointer text-red-400"
+              onClick={() => {
+                onDelete(item);
+                onClose();
+              }}
+            >
               <Trash2 size={18} /> Delete
             </li>
           </ul>
@@ -219,15 +135,30 @@ const FileContextMenu = ({
         {item.fileType === "file" && !item.binary && (
           <li
             className="px-4 py-2 hover:bg-gray-700 flex items-center gap-2 cursor-pointer"
-            onClick={onEdit}
+            onClick={() => {
+              onEdit(item);
+              onClose();
+            }}
           >
             <Edit size={14} /> Edit
           </li>
         )}
-        <li className="px-4 py-2 hover:bg-gray-700 flex items-center gap-2 cursor-pointer">
+        <li
+          className="px-4 py-2 hover:bg-gray-700 flex items-center gap-2 cursor-pointer"
+          onClick={() => {
+            onDownload(item);
+            onClose();
+          }}
+        >
           <Download size={14} /> Download
         </li>
-        <li className="px-4 py-2 hover:bg-gray-700 flex items-center gap-2 cursor-pointer text-red-400">
+        <li
+          className="px-4 py-2 hover:bg-gray-700 flex items-center gap-2 cursor-pointer text-red-400"
+          onClick={() => {
+            onDelete(item);
+            onClose();
+          }}
+        >
           <Trash2 size={14} /> Delete
         </li>
       </ul>
@@ -239,24 +170,35 @@ const FileContextMenu = ({
 const FileEditor = ({ file, onClose, onSave, isMobile }) => {
   const [content, setContent] = useState(file.content || "");
   const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleContentChange = (e) => {
     setContent(e.target.value);
     setIsDirty(true);
   };
 
-  const handleSave = () => {
-    onSave(file.id, content);
-    setIsDirty(false);
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await onSave(file.id, content);
+      setIsDirty(false);
+    } catch (error) {
+      console.error("Error in handleSave:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <div className="flex flex-col h-full bg-white text-black">
+    <div className="flex flex-col h-full bg-gray-100 text-gray-900">
       {/* Editor header */}
-      <div className="flex items-center justify-between bg-gray-100 px-4 py-2 border-b border-gray-300">
+      <div className="flex items-center justify-between bg-gray-200 px-4 py-2 border-b border-gray-300">
         <div className="flex items-center gap-2">
           {isMobile && (
-            <button onClick={onClose} className="mr-1">
+            <button
+              onClick={onClose}
+              className="mr-1 p-1 hover:bg-gray-300 rounded"
+            >
               <ArrowLeft size={16} />
             </button>
           )}
@@ -266,15 +208,24 @@ const FileEditor = ({ file, onClose, onSave, isMobile }) => {
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="p-1 hover:bg-blue-100 rounded flex items-center gap-1 text-xs text-blue-600"
+            className={`p-1 rounded flex items-center gap-1 text-xs ${
+              isDirty
+                ? "bg-blue-500 hover:bg-blue-600 text-white"
+                : "text-gray-400 bg-gray-300 cursor-not-allowed"
+            }`}
             onClick={handleSave}
+            disabled={!isDirty || isSaving}
           >
-            <Save size={14} />
-            {!isMobile && <span>Save</span>}
+            {isSaving ? (
+              <Loader size={14} className="animate-spin" />
+            ) : (
+              <Save size={14} />
+            )}
+            {!isMobile && <span>{isSaving ? "Saving..." : "Save"}</span>}
           </button>
           {!isMobile && (
             <button
-              className="p-1 hover:bg-gray-200 rounded flex items-center gap-1 text-xs"
+              className="p-1 hover:bg-gray-300 rounded flex items-center gap-1 text-xs"
               onClick={onClose}
             >
               <X size={14} />
@@ -286,17 +237,17 @@ const FileEditor = ({ file, onClose, onSave, isMobile }) => {
 
       {/* Editor content */}
       {file.binary ? (
-        <div className="flex-grow flex items-center justify-center bg-gray-50 p-4 text-center text-gray-500">
+        <div className="flex-grow flex items-center justify-center bg-gray-50 p-4 text-center text-gray-500 overflow-auto">
           <div>
             <div className="mb-2">Binary file cannot be edited in browser</div>
             <div className="text-sm">
-              File type: {file.extension.toUpperCase()}
+              File type: {file.extension?.toUpperCase() || "Unknown"}
             </div>
           </div>
         </div>
       ) : (
         <textarea
-          className="flex-grow p-4 bg-white text-black border-0 font-mono text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 w-full"
+          className="flex-grow p-4 bg-white text-gray-900 border-0 font-mono text-sm resize-none focus:outline-none focus:ring-1 focus:ring-blue-500 w-full overflow-auto"
           value={content}
           onChange={handleContentChange}
           spellCheck="false"
@@ -307,16 +258,19 @@ const FileEditor = ({ file, onClose, onSave, isMobile }) => {
 };
 
 // FileItem component to handle both files and folders
-const FileItem = ({ item, level = 0, onSelectFile, isMobile }) => {
+const FileItem = ({
+  item,
+  level = 0,
+  onSelectFile,
+  isMobile,
+  onContextMenu,
+}) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [contextMenu, setContextMenu] = useState({
-    visible: false,
-    x: 0,
-    y: 0,
-  });
   const [isHovered, setIsHovered] = useState(false);
+  const itemRef = useRef(null);
 
-  const toggleFolder = () => {
+  const toggleFolder = (e) => {
+    e.stopPropagation();
     if (item.fileType === "folder") {
       setIsOpen(!isOpen);
     }
@@ -324,41 +278,37 @@ const FileItem = ({ item, level = 0, onSelectFile, isMobile }) => {
 
   const handleContextMenu = (e) => {
     e.preventDefault();
-    setContextMenu({
-      visible: true,
+    e.stopPropagation();
+
+    const rect = itemRef.current.getBoundingClientRect();
+
+    onContextMenu({
+      item,
       x: isMobile ? 0 : e.clientX,
       y: isMobile ? 0 : e.clientY,
-      item: item,
+      rect,
     });
-
-    if (!isMobile) {
-      document.addEventListener("click", closeContextMenu);
-    }
   };
 
-  const closeContextMenu = () => {
-    setContextMenu({ visible: false, x: 0, y: 0, item: null });
-    document.removeEventListener("click", closeContextMenu);
-  };
-
-  const handleFileSelect = () => {
+  const handleFileSelect = (e) => {
+    e.stopPropagation();
     if (item.fileType === "file") {
       onSelectFile(item);
     }
   };
 
-  const handleClick = () => {
+  const handleClick = (e) => {
     if (isMobile) {
       if (item.fileType === "folder") {
-        toggleFolder();
+        toggleFolder(e);
       } else {
-        handleContextMenu({ preventDefault: () => {}, clientX: 0, clientY: 0 });
+        handleContextMenu(e);
       }
     } else {
       if (item.fileType === "folder") {
-        toggleFolder();
+        toggleFolder(e);
       } else {
-        handleFileSelect();
+        handleFileSelect(e);
       }
     }
   };
@@ -366,8 +316,9 @@ const FileItem = ({ item, level = 0, onSelectFile, isMobile }) => {
   return (
     <>
       <div
-        className={`flex items-center w-full cursor-pointer hover:bg-gray-200 hover:text-white ${
-          isHovered ? "bg-gray-700" : ""
+        ref={itemRef}
+        className={`flex items-center w-full cursor-pointer ${
+          isHovered ? "bg-gray-200" : ""
         }`}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
@@ -382,14 +333,14 @@ const FileItem = ({ item, level = 0, onSelectFile, isMobile }) => {
             {item.fileType === "folder" ? (
               <span className="flex items-center gap-1 flex-shrink-0">
                 {isOpen ? (
-                  <ChevronDown size={14} />
+                  <ChevronDown size={14} className="text-gray-500" />
                 ) : (
-                  <ChevronRight size={14} />
+                  <ChevronRight size={14} className="text-gray-500" />
                 )}
                 {isOpen ? (
-                  <FolderOpen className="text-blue-400" size={16} />
+                  <FolderOpen className="text-blue-500" size={16} />
                 ) : (
-                  <FolderClosed className="text-blue-400" size={16} />
+                  <FolderClosed className="text-blue-500" size={16} />
                 )}
               </span>
             ) : (
@@ -397,13 +348,13 @@ const FileItem = ({ item, level = 0, onSelectFile, isMobile }) => {
                 {getFileIcon(item.extension)}
               </span>
             )}
-            <span className="truncate">{item.name}</span>
+            <span className="truncate text-gray-900">{item.name}</span>
           </div>
         </div>
 
         {/* Only show size and date on larger screens */}
         {item.fileType === "file" && !isMobile && (
-          <div className="flex items-center gap-4 px-4 text-xs text-gray-400">
+          <div className="flex items-center gap-4 px-4 text-xs text-gray-500">
             <span className="w-24 text-right">{item.size}</span>
             <span className="w-24 text-right">{item.modifiedAt}</span>
           </div>
@@ -420,27 +371,33 @@ const FileItem = ({ item, level = 0, onSelectFile, isMobile }) => {
               level={level + 1}
               onSelectFile={onSelectFile}
               isMobile={isMobile}
+              onContextMenu={onContextMenu}
             />
           ))}
         </div>
       )}
-
-      <FileContextMenu
-        isVisible={contextMenu.visible}
-        x={contextMenu.x}
-        y={contextMenu.y}
-        onClose={closeContextMenu}
-        onEdit={() => {
-          closeContextMenu();
-          if (item.fileType === "file") {
-            onSelectFile(item);
-          }
-        }}
-        isMobile={isMobile}
-        item={contextMenu.item || item}
-      />
     </>
   );
+};
+
+// Hook to detect mobile viewport
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkIsMobile();
+    window.addEventListener("resize", checkIsMobile);
+
+    return () => {
+      window.removeEventListener("resize", checkIsMobile);
+    };
+  }, []);
+
+  return isMobile;
 };
 
 // Find a file by id in the file tree
@@ -473,31 +430,69 @@ const updateFileContent = (tree, id, newContent) => {
   });
 };
 
-// Hook to detect mobile viewport
-const useIsMobile = () => {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
-    checkIsMobile();
-    window.addEventListener("resize", checkIsMobile);
-
-    return () => {
-      window.removeEventListener("resize", checkIsMobile);
-    };
-  }, []);
-
-  return isMobile;
+// Remove an item from the file tree
+const removeItemById = (tree, id) => {
+  return tree
+    .filter((item) => item.id !== id)
+    .map((item) => {
+      if (item.fileType === "folder" && item.children) {
+        return {
+          ...item,
+          children: removeItemById(item.children, id),
+        };
+      }
+      return item;
+    });
 };
 
 const FileManager = () => {
-  const [fileTree, setFileTree] = useState(initialFileTree);
+  const [fileTree, setFileTree] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [contextMenu, setContextMenu] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    item: null,
+  });
   const isMobile = useIsMobile();
+  const fileManagerRef = useRef(null);
+
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (contextMenu.visible) {
+        setContextMenu({ visible: false, x: 0, y: 0, item: null });
+      }
+    };
+
+    if (contextMenu.visible) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [contextMenu.visible]);
+
+  // Load file tree data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const response = await axios.get("/api/files");
+        setFileTree(response.data);
+      } catch (error) {
+        console.error("Failed to fetch file tree:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   const handleSelectFile = (file) => {
     setSelectedFile(file);
@@ -509,21 +504,88 @@ const FileManager = () => {
     setSelectedFile(null);
   };
 
-  const handleSaveFile = (fileId, newContent) => {
-    // Update the file tree with new content
-    const updatedTree = updateFileContent(fileTree, fileId, newContent);
-    setFileTree(updatedTree);
+  const handleSaveFile = async (fileId, newContent) => {
+    try {
+      // For use in FileEditor component
+      setIsSaving(true);
 
-    // Also update the selected file if it's still open
-    if (selectedFile && selectedFile.id === fileId) {
-      setSelectedFile({ ...selectedFile, content: newContent });
+      // Send the updated content to the server
+      await axios.post(`/api/files/${fileId}`, {
+        content: newContent,
+      });
+
+      // Update the file tree with new content
+      const updatedTree = updateFileContent(fileTree, fileId, newContent);
+      setFileTree(updatedTree);
+
+      // Also update the selected file if it's still open
+      if (selectedFile && selectedFile.id === fileId) {
+        setSelectedFile({ ...selectedFile, content: newContent });
+      }
+    } catch (error) {
+      console.error("Failed to save file:", error);
+      alert("Failed to save file. Please try again.");
+    } finally {
+      // For use in FileEditor component
+      setIsSaving(false);
+    }
+  };
+
+  const handleContextMenu = ({ item, x, y }) => {
+    setContextMenu({
+      visible: true,
+      x,
+      y,
+      item,
+    });
+  };
+
+  const handleDelete = async (item) => {
+    try {
+      // Send delete request to the server
+      await axios.delete(`/api/files/${item.id}`);
+
+      // Remove the item from the file tree
+      const updatedTree = removeItemById(fileTree, item.id);
+      setFileTree(updatedTree);
+
+      // Close the editor if the deleted file was open
+      if (selectedFile && selectedFile.id === item.id) {
+        setShowEditor(false);
+        setSelectedFile(null);
+      }
+    } catch (error) {
+      console.error("Failed to delete item:", error);
+      alert("Failed to delete item. Please try again.");
+    }
+  };
+
+  const handleDownload = async (item) => {
+    try {
+      // Request the file from the server
+      const response = await axios.get(`/api/files/${item.id}/download`, {
+        responseType: "blob",
+      });
+
+      // Create a blob URL and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", item.name);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Failed to download file:", error);
+      alert("Failed to download file. Please try again.");
     }
   };
 
   // Mobile view: show either file browser or editor, not both
   if (isMobile && showEditor && selectedFile) {
     return (
-      <div className="flex flex-col h-96 border border-gray-800 rounded shadow-lg overflow-hidden bg-gray-900 text-gray-100">
+      <div className="flex flex-col h-96 rounded shadow-lg overflow-hidden bg-gray-100 text-gray-900">
         <FileEditor
           file={selectedFile}
           onClose={handleCloseEditor}
@@ -535,17 +597,28 @@ const FileManager = () => {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-full w-full border border-blue-800 rounded shadow-lg overflow-hidden bg-gray-100 text-gray-900">
+    <div
+      ref={fileManagerRef}
+      className="flex flex-col md:flex-row h-96 w-full border border-gray-300 rounded shadow-lg overflow-hidden bg-white text-gray-900"
+    >
       {/* File Manager Panel */}
       <div
         className={`flex flex-col ${
           !isMobile && showEditor
-            ? "md:border-r border-blue-700 w-full"
+            ? "md:w-1/3 md:border-r border-gray-300"
             : "w-full"
-        }`}
+        } h-full overflow-hidden`}
       >
+        {/* Toolbar */}
+        <div className="flex items-center justify-between text-sm py-2 px-3 bg-gray-100 border-b border-gray-300 flex-shrink-0">
+          <div className="font-medium">Files</div>
+          <button className="p-1 hover:bg-gray-200 rounded">
+            <Plus size={16} />
+          </button>
+        </div>
+
         {/* Column headers - hide detail columns on mobile */}
-        <div className="flex items-center text-xs text-gray-100 py-2 px-3 bg-gray-800 border-b border-gray-700">
+        <div className="flex items-center text-xs text-gray-600 py-2 px-3 bg-gray-50 border-b border-gray-200 flex-shrink-0">
           <div className="flex-grow">Name</div>
           {!isMobile && (
             <>
@@ -555,22 +628,34 @@ const FileManager = () => {
           )}
         </div>
 
-        {/* File tree */}
-        <div className="flex-grow overflow-auto">
-          {fileTree.map((item) => (
-            <FileItem
-              key={item.id}
-              item={item}
-              onSelectFile={handleSelectFile}
-              isMobile={isMobile}
-            />
-          ))}
+        {/* File tree - THIS IS THE MAIN SCROLLABLE CONTAINER */}
+        <div className="flex-grow overflow-auto min-h-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <Loader size={24} className="animate-spin mr-2" />
+              <span>Loading files...</span>
+            </div>
+          ) : fileTree.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              No files found
+            </div>
+          ) : (
+            fileTree.map((item) => (
+              <FileItem
+                key={item.id}
+                item={item}
+                onSelectFile={handleSelectFile}
+                isMobile={isMobile}
+                onContextMenu={handleContextMenu}
+              />
+            ))
+          )}
         </div>
       </div>
 
       {/* File Editor Panel - only show on desktop when a file is selected */}
       {!isMobile && showEditor && selectedFile && (
-        <div className="w-2/3">
+        <div className="w-2/3 overflow-hidden">
           <FileEditor
             file={selectedFile}
             onClose={handleCloseEditor}
@@ -579,6 +664,21 @@ const FileManager = () => {
           />
         </div>
       )}
+
+      {/* Context Menu */}
+      <FileContextMenu
+        isVisible={contextMenu.visible}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        onClose={() =>
+          setContextMenu({ visible: false, x: 0, y: 0, item: null })
+        }
+        onEdit={handleSelectFile}
+        onDelete={handleDelete}
+        onDownload={handleDownload}
+        isMobile={isMobile}
+        item={contextMenu.item}
+      />
     </div>
   );
 };
