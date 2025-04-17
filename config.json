@@ -1,0 +1,4 @@
+{
+    "startup": "java -jar server.jar",
+    "enabled": true
+}

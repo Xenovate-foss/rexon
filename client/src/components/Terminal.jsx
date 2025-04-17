@@ -3,22 +3,28 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
+import { io } from "socket.io-client";
 
 const XTerminal = () => {
   const terminalRef = useRef(null);
   const terminal = useRef(null);
   const fitAddonRef = useRef(null);
+  const socketRef = useRef(null);
   const [inputValue, setInputValue] = useState("");
   const [commandHistory, setCommandHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
+  const [isServerOnline, setIsServerOnline] = useState(false);
 
+  // Initialize terminal
   useEffect(() => {
-    // Only initialize if not already initialized
     if (terminal.current) return;
 
     console.log("Initializing terminal...");
 
     try {
+      // Create terminal instance
       terminal.current = new Terminal({
         cursorBlink: false,
         disableStdin: true,
@@ -43,40 +49,33 @@ const XTerminal = () => {
       terminal.current.loadAddon(fitAddonRef.current);
       terminal.current.loadAddon(webLinksAddon);
 
+      // Mount terminal to DOM with proper timing
       if (terminalRef.current) {
         console.log("Opening terminal on DOM element");
+
         terminal.current.open(terminalRef.current);
         console.log("Terminal opened");
 
-        // Increase timeout to ensure DOM is fully ready
+        // Show initial message
+        terminal.current.writeln(
+          "\x1b[97m[\x1b[31mDemon\x1b[97m]\x1b[0m: Terminal initialized."
+        );
+
+        // Use a slightly longer timeout for better reliability
         setTimeout(() => {
-          console.log("Fitting terminal...");
-          if (fitAddonRef.current) {
+          if (fitAddonRef.current && terminal.current) {
             try {
               fitAddonRef.current.fit();
               console.log("Terminal fitted");
+              terminal.current.focus();
+              terminal.current.write("\r\n\x1b[36m> \x1b[0m");
             } catch (err) {
               console.error("Error fitting terminal:", err);
             }
           }
-          if (terminal.current) {
-            terminal.current.focus();
-            console.log("Terminal focused");
-          }
-        }, 100);
+        }, 300);
 
-        // Initial welcome message
-        terminal.current.writeln(
-          "\x1b[97m[\x1b[31mDemon\x1b[97m]\x1b[0m: Connecting..."
-        );
-        terminal.current.writeln(
-          "\x1b[97m[\x1b[31mDemon\x1b[97m]\x1b[0m: Connected."
-        );
-        terminal.current.writeln(
-          "\x1b[97m[\x1b[31mDemon\x1b[97m]\x1b[0m: Type 'help' for available commands."
-        );
-        terminal.current.write("\r\n\x1b[36m> \x1b[0m");
-
+        // Set up event listeners
         const enableFocus = () => {
           if (terminal.current) {
             terminal.current.focus();
@@ -86,9 +85,8 @@ const XTerminal = () => {
         terminalRef.current.addEventListener("touchstart", enableFocus);
         terminalRef.current.addEventListener("click", enableFocus);
 
-        // Use window resize event as well as ResizeObserver
+        // Handle resizing
         const handleResize = () => {
-          console.log("Resize detected");
           if (fitAddonRef.current && terminal.current) {
             try {
               fitAddonRef.current.fit();
@@ -100,8 +98,11 @@ const XTerminal = () => {
 
         window.addEventListener("resize", handleResize);
 
+        // Use ResizeObserver with debouncing
+        let resizeTimer;
         const resizeObserver = new ResizeObserver(() => {
-          handleResize();
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(handleResize, 100);
         });
 
         if (terminalRef.current) {
@@ -110,6 +111,7 @@ const XTerminal = () => {
 
         return () => {
           console.log("Cleaning up terminal...");
+          clearTimeout(resizeTimer);
           resizeObserver.disconnect();
           window.removeEventListener("resize", handleResize);
 
@@ -131,63 +133,149 @@ const XTerminal = () => {
     }
   }, []);
 
-  // Handle command execution
-  const executeCommand = (command) => {
+  // Separate socket connection logic for better control
+  useEffect(() => {
+    // Don't proceed if terminal isn't initialized
     if (!terminal.current) return;
 
-    // Add to history only if it's not empty and not the same as the last command
-    if (
-      command.trim() &&
-      (commandHistory.length === 0 || commandHistory[0] !== command)
-    ) {
-      setCommandHistory([command, ...commandHistory]);
-    }
-    setHistoryIndex(-1);
+    terminal.current.writeln(
+      "\r\n\x1b[97m[\x1b[31mDemon\x1b[97m]\x1b[0m: Attempting to connect to server..."
+    );
 
-    terminal.current.writeln(`\r\x1b[36m> \x1b[0m${command}`);
+    // Try multiple transport methods
+    socketRef.current = io("https://3m9wyg-3000.csb.app/", {
+      reconnectionDelayMax: 10000,
+      reconnectionAttempts: 5,
+      timeout: 10000,
+      transports: ["polling", "websocket"], // Try polling first, then upgrade to websocket
+      // For debugging purposes
+      extraHeaders: {
+        "Custom-Client-Id": "XTerminal-Client",
+      },
+    });
 
-    // Process the command
-    switch (command.trim().toLowerCase()) {
-      case "help":
-        terminal.current.writeln("\r\nAvailable commands:");
-        terminal.current.writeln("  help     - Show this help message");
-        terminal.current.writeln("  clear    - Clear the terminal");
-        terminal.current.writeln("  echo     - Echo a message back");
-        terminal.current.writeln("  version  - Show terminal version");
-        terminal.current.writeln("  history  - Show command history");
-        break;
-      case "clear":
-        terminal.current.clear();
-        break;
-      case "version":
-        terminal.current.writeln("\r\nTerminal v1.0.0");
-        break;
-      case "history":
-        terminal.current.writeln("\r\nCommand history:");
-        commandHistory.forEach((cmd, i) => {
-          terminal.current.writeln(`  ${i + 1}: ${cmd}`);
-        });
-        break;
-      case "":
-        // Just show a new prompt for empty commands
-        break;
-      default:
-        if (command.trim().toLowerCase().startsWith("echo ")) {
-          const message = command.trim().substring(5);
-          terminal.current.writeln(`\r\n${message}`);
-        } else {
-          terminal.current.writeln(`\r\nCommand not found: ${command}`);
-          terminal.current.writeln("Type 'help' for available commands.");
+    // Set up socket event handlers
+    socketRef.current.on("connect", () => {
+      setIsConnected(true);
+      setIsServerOnline(true); // Update server online status
+      setConnectionAttempts(0);
+      if (terminal.current) {
+        terminal.current.writeln(
+          "\r\n\x1b[97m[\x1b[32mSuccess\x1b[97m]\x1b[0m: Connected to server."
+        );
+        terminal.current.write("\r\n\x1b[36m> \x1b[0m");
+      }
+    });
+
+    socketRef.current.on("connect_error", (error) => {
+      const attempts = connectionAttempts + 1;
+      setConnectionAttempts(attempts);
+      setIsServerOnline(false); // Update server online status
+
+      if (terminal.current) {
+        terminal.current.writeln(
+          `\r\n\x1b[97m[\x1b[31mError\x1b[97m]\x1b[0m: Connection failed (attempt ${attempts}): ${error.message}`
+        );
+
+        // Provide more helpful information
+        if (
+          error.message.includes("xhr poll error") ||
+          error.message.includes("CORS")
+        ) {
+          terminal.current.writeln(
+            "\r\n\x1b[97m[\x1b[33mInfo\x1b[97m]\x1b[0m: This may be a CORS issue. The server might not allow connections from this origin."
+          );
         }
-    }
 
-    terminal.current.write("\r\n\x1b[36m> \x1b[0m");
-  };
+        if (attempts >= 3) {
+          terminal.current.writeln(
+            "\r\n\x1b[97m[\x1b[33mInfo\x1b[97m]\x1b[0m: Multiple connection failures. The server might be offline or the URL may be incorrect."
+          );
+        }
+
+        terminal.current.write("\r\n\x1b[36m> \x1b[0m");
+      }
+    });
+
+    socketRef.current.on("server:history", (h) => {
+      if (terminal.current) {
+        terminal.current.write(h);
+      }
+    });
+
+    socketRef.current.on("server:output", (data) => {
+      if (terminal.current) {
+        terminal.current.write(data);
+      }
+    });
+
+    socketRef.current.on("server:status", (s) => {
+      setIsServerOnline(s);
+    });
+
+    socketRef.current.on("disconnect", (reason) => {
+      setIsConnected(false);
+      setIsServerOnline(false); // Update server online status
+      if (terminal.current) {
+        terminal.current.writeln(
+          `\r\n\x1b[97m[\x1b[31mDisconnect\x1b[97m]\x1b[0m: ${reason}. Attempting to reconnect...`
+        );
+        terminal.current.write("\r\n\x1b[36m> \x1b[0m");
+      }
+    });
+
+    socketRef.current.on("reconnect_attempt", (attemptNumber) => {
+      if (terminal.current) {
+        terminal.current.writeln(
+          `\r\n\x1b[97m[\x1b[33mReconnect\x1b[97m]\x1b[0m: Attempt ${attemptNumber}...`
+        );
+      }
+    });
+
+    socketRef.current.on("reconnect_failed", () => {
+      if (terminal.current) {
+        terminal.current.writeln(
+          "\r\n\x1b[97m[\x1b[31mFailed\x1b[97m]\x1b[0m: Reconnection failed after multiple attempts."
+        );
+        terminal.current.writeln(
+          "\r\n\x1b[97m[\x1b[33mTip\x1b[97m]\x1b[0m: Try the 'reconnect' command or check server status."
+        );
+        terminal.current.write("\r\n\x1b[36m> \x1b[0m");
+      }
+    });
+
+    // Clean up socket connection
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [connectionAttempts]);
 
   // Handle input submission
   const handleSubmit = (e) => {
     e.preventDefault();
-    executeCommand(inputValue);
+    if (!inputValue.trim()) return;
+
+    // Add command to history
+    const newHistory = [inputValue, ...commandHistory].slice(0, 50); // Keep last 50 commands
+    setCommandHistory(newHistory);
+    setHistoryIndex(-1);
+
+    if (terminal.current) {
+      terminal.current.writeln(`\r\n${inputValue}`);
+    }
+
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit("server:execute", { cmd: inputValue });
+    } else if (terminal.current) {
+      terminal.current.writeln(
+        "\r\n\x1b[97m[\x1b[31mError\x1b[97m]\x1b[0m: Not connected to server"
+      );
+      terminal.current.write("\r\n\x1b[36m> \x1b[0m");
+    }
+
     setInputValue("");
   };
 
@@ -218,8 +306,82 @@ const XTerminal = () => {
     }
   };
 
+  // Handle server control actions
+  const handleServerAction = (action) => {
+    if (!socketRef.current) return;
+
+    // Emitting control commands to the server
+    socketRef.current.emit("server:action", { action });
+
+    if (terminal.current) {
+      terminal.current.writeln(
+        `\r\n\x1b[97m[\x1b[33mControl\x1b[97m]\x1b[0m: Sending ${action} command to server...`
+      );
+    }
+  };
+
+  // Handle manual reconnection
+  const handleReconnect = () => {
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current.connect();
+
+      if (terminal.current) {
+        terminal.current.writeln(
+          "\r\n\x1b[97m[\x1b[33mReconnect\x1b[97m]\x1b[0m: Manually reconnecting..."
+        );
+      }
+    }
+  };
+
   return (
     <div className="w-full h-full p-2 flex flex-col">
+      <div className="flex flex-wrap">
+        <button
+          className="text-white px-4 py-2 m-2 bg-blue-800 shadow-sm rounded-md hover:bg-blue-600 disabled:opacity-50"
+          disabled={isServerOnline}
+          onClick={() => handleServerAction("start")}
+        >
+          Start
+        </button>
+        <button
+          className="text-white px-4 py-2 m-2 bg-red-800 shadow-sm rounded-md hover:bg-red-600 disabled:opacity-50"
+          disabled={!isServerOnline}
+          onClick={() => handleServerAction("stop")}
+        >
+          Stop
+        </button>
+        <button
+          className="text-white px-4 py-2 m-2 bg-yellow-800 shadow-sm rounded-md hover:bg-yellow-600 disabled:opacity-50"
+          disabled={!isServerOnline}
+          onClick={() => handleServerAction("restart")}
+        >
+          Restart
+        </button>
+        <button
+          className="text-white px-4 py-2 m-2 bg-red-800 shadow-sm rounded-md hover:bg-red-600 disabled:opacity-50"
+          disabled={!isServerOnline}
+          onClick={() => handleServerAction("kill")}
+        >
+          Kill
+        </button>
+        <button
+          className="text-white px-4 py-2 m-2 bg-green-800 shadow-sm rounded-md hover:bg-green-600"
+          onClick={handleReconnect}
+        >
+          Reconnect
+        </button>
+        <div className="flex items-center ml-2">
+          <div
+            className={`w-3 h-3 rounded-full mr-2 ${
+              isConnected ? "bg-green-500" : "bg-red-500"
+            }`}
+          ></div>
+          <span className="text-white text-sm">
+            {isConnected ? "Connected" : "Disconnected"}
+          </span>
+        </div>
+      </div>
       <div
         ref={terminalRef}
         style={{
