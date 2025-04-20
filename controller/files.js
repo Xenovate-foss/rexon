@@ -1,37 +1,57 @@
 import { Router } from "express";
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath } from "node:url";
+import crypto from "crypto"; // For generating unique IDs
 
 const router = Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const rootDir = path.join(__dirname, "..", "server"); // points to ./server
+const rootDir = path.join(__dirname, "..", "server"); // Points to ./server
 
+// Helper to generate a unique ID for files/folders
+const generateId = (filePath) => {
+  return crypto.createHash("md5").update(filePath).digest("hex");
+};
+
+// Helper to get file tree
 function getFileTree(dirPath) {
   const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 
-  return entries.map((entry, index) => {
+  return entries.map((entry) => {
     const fullPath = path.join(dirPath, entry.name);
     const stats = fs.statSync(fullPath);
     const ext = path.extname(entry.name).toLowerCase();
-    const isBinary =
-      !entry.isDirectory() &&
-      ![".txt", ".js", ".json", ".md", ".html", ".css"].includes(ext);
+    const relativePath = fullPath.slice(rootDir.length).replace(/\\/g, "/");
+
+    const textExtensions = [
+      ".txt",
+      ".js",
+      ".json",
+      ".md",
+      ".html",
+      ".css",
+      ".properties",
+      ".yml",
+      ".yaml",
+      ".php",
+      ".jsonld",
+    ];
+    const isBinary = !entry.isDirectory() && !textExtensions.includes(ext);
+
+    const baseInfo = {
+      id: generateId(fullPath), // Add unique ID
+      name: entry.name,
+      path: relativePath,
+      fileType: entry.isDirectory() ? "folder" : "file",
+    };
 
     if (entry.isDirectory()) {
-      return {
-        id: Date.now() + index,
-        name: entry.name,
-        fileType: "folder",
-        children: getFileTree(fullPath),
-      };
+      return baseInfo;
     }
 
     return {
-      id: Date.now() + index,
-      name: entry.name,
-      fileType: "file",
+      ...baseInfo,
       extension: ext.replace(".", ""),
       size: (stats.size / 1024 / 1024).toFixed(1) + " MB",
       modifiedAt: new Date(stats.mtime).toISOString().split("T")[0],
@@ -40,143 +60,149 @@ function getFileTree(dirPath) {
   });
 }
 
-// Helper function to find a file/folder by ID in the file tree
-function findItemById(tree, id) {
-  for (const item of tree) {
-    if (item.id.toString() === id.toString()) {
-      return item;
-    }
+// Helper to get absolute path
+function getAbsolutePath(relativePath) {
+  const normalizedPath = path
+    .normalize(relativePath)
+    .replace(/^(\.\.(\/|\\|$))+/, "");
+  const absolutePath = path.join(rootDir, normalizedPath);
 
-    if (item.children) {
-      const found = findItemById(item.children, id);
-      if (found) return found;
-    }
+  if (!absolutePath.startsWith(rootDir)) {
+    return null;
   }
-  return null;
+
+  return absolutePath;
 }
 
-// Helper function to get the absolute path from item
-function getItemPath(item, tree) {
-  if (!item) return null;
-
-  // For files, we can directly construct the path
-  if (item.fileType === "file") {
-    // Need to find the parent folder structure
-    // This is a simplified approach - in a real app you might need a more robust solution
-    const parts = [];
-    let currentItem = item;
-
-    // Start with the item's name
-    parts.unshift(currentItem.name);
-
-    // Find parent folders by traversing the tree
-    const findParents = (tree, targetItem, currentPath = []) => {
-      for (const node of tree) {
-        if (node.children) {
-          for (const child of node.children) {
-            if (child.id === targetItem.id) {
-              return [...currentPath, node.name];
-            }
-          }
-
-          const result = findParents(node.children, targetItem, [
-            ...currentPath,
-            node.name,
-          ]);
-          if (result) return result;
-        }
-      }
-      return null;
-    };
-
-    const parentPath = findParents(tree, item) || [];
-    return path.join(rootDir, ...parentPath, item.name);
-  }
-
-  // For folders
-  if (item.fileType === "folder") {
-    // Similar logic as above
-    const parts = [item.name];
-    // Find parent folders...
-    return path.join(rootDir, ...parts);
-  }
-
-  return null;
-}
-
+// List files in a directory
 router.get("/files", (req, res) => {
   try {
-    const tree = getFileTree(rootDir);
-    res.json(tree);
+    const requestedPath = req.query.path || "/";
+    const targetPath = getAbsolutePath(requestedPath);
+
+    if (!targetPath) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (!fs.existsSync(targetPath)) {
+      return res.status(404).json({ error: "Path not found" });
+    }
+
+    const stats = fs.statSync(targetPath);
+    if (!stats.isDirectory()) {
+      return res.status(400).json({ error: "Not a directory" });
+    }
+
+    const files = getFileTree(targetPath);
+    res.json(files);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get a single file by ID
-router.get("/files/:id", (req, res) => {
+// Get a single file or folder by path
+router.get("/fileinfo", (req, res) => {
   try {
-    const tree = getFileTree(rootDir);
-    const item = findItemById(tree, req.params.id);
+    const filePath = req.query.path;
+    const absolutePath = getAbsolutePath(filePath);
 
-    if (!item) {
-      return res.status(404).json({ error: "File or folder not found" });
+    if (!absolutePath) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
-    if (item.fileType === "folder") {
-      return res.json(item);
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ error: "Path not found" });
     }
 
-    const filePath = getItemPath(item, tree);
-    if (!filePath) {
-      return res
-        .status(404)
-        .json({ error: "File path could not be determined" });
+    const stats = fs.statSync(absolutePath);
+    const ext = path.extname(absolutePath).toLowerCase();
+
+    const textExtensions = [
+      ".txt",
+      ".js",
+      ".json",
+      ".md",
+      ".html",
+      ".css",
+      ".properties",
+      ".yml",
+      ".yaml",
+      ".php",
+      ".jsonld",
+    ];
+    const isBinary = !stats.isDirectory() && !textExtensions.includes(ext);
+
+    const fileInfo = {
+      id: generateId(absolutePath),
+      name: path.basename(absolutePath),
+      path: filePath,
+      fileType: stats.isDirectory() ? "folder" : "file",
+    };
+
+    if (!stats.isDirectory()) {
+      fileInfo.extension = ext.replace(".", "");
+      fileInfo.size = (stats.size / 1024 / 1024).toFixed(1) + " MB";
+      fileInfo.modifiedAt = new Date(stats.mtime).toISOString().split("T")[0];
+      fileInfo.binary = isBinary;
+
+      if (!isBinary) {
+        fileInfo.content = fs.readFileSync(absolutePath, "utf8");
+      }
     }
 
-    // For text files, return the content
-    if (!item.binary) {
-      const content = fs.readFileSync(filePath, "utf8");
-      return res.json({ ...item, content });
-    }
-
-    // For binary files, just return the metadata
-    res.json(item);
+    res.json(fileInfo);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // Update file content
-router.post("/files/:id", (req, res) => {
+router.post("/updatefile", (req, res) => {
   try {
     const { content } = req.body;
     if (content === undefined) {
       return res.status(400).json({ error: "No content provided" });
     }
 
-    const tree = getFileTree(rootDir);
-    const item = findItemById(tree, req.params.id);
+    const filePath = req.query.path;
+    const absolutePath = getAbsolutePath(filePath);
 
-    if (!item || item.fileType !== "file") {
+    if (!absolutePath) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (!fs.existsSync(absolutePath)) {
       return res.status(404).json({ error: "File not found" });
     }
 
-    const filePath = getItemPath(item, tree);
-    if (!filePath) {
-      return res
-        .status(404)
-        .json({ error: "File path could not be determined" });
+    const stats = fs.statSync(absolutePath);
+    if (stats.isDirectory()) {
+      return res.status(400).json({ error: "Cannot update a directory" });
     }
 
-    // Don't allow updating binary files through this endpoint
-    if (item.binary) {
+    const ext = path.extname(absolutePath).toLowerCase();
+    const textExtensions = [
+      ".txt",
+      ".js",
+      ".json",
+      ".md",
+      ".html",
+      ".css",
+      ".properties",
+      ".yml",
+      ".yaml",
+      ".php",
+      ".jsonld",
+    ];
+    const isBinary = !textExtensions.includes(ext);
+
+    if (isBinary) {
       return res
         .status(400)
         .json({ error: "Cannot update binary files through this endpoint" });
     }
 
-    fs.writeFileSync(filePath, content, "utf8");
+    fs.writeFileSync(absolutePath, content, "utf8");
     res.json({ success: true, message: "File updated successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -184,32 +210,31 @@ router.post("/files/:id", (req, res) => {
 });
 
 // Delete a file or folder
-router.delete("/files/:id", (req, res) => {
+router.delete("/file", (req, res) => {
   try {
-    const tree = getFileTree(rootDir);
-    const item = findItemById(tree, req.params.id);
+    const filePath = req.query.path;
+    const absolutePath = getAbsolutePath(filePath);
 
-    if (!item) {
-      return res.status(404).json({ error: "File or folder not found" });
+    if (!absolutePath) {
+      return res.status(403).json({ error: "Access denied" });
     }
 
-    const itemPath = getItemPath(item, tree);
-    if (!itemPath) {
-      return res
-        .status(404)
-        .json({ error: "File path could not be determined" });
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ error: "Path not found" });
     }
 
-    if (item.fileType === "folder") {
-      fs.rmdirSync(itemPath, { recursive: true });
+    const stats = fs.statSync(absolutePath);
+
+    if (stats.isDirectory()) {
+      fs.rmSync(absolutePath, { recursive: true, force: true });
     } else {
-      fs.unlinkSync(itemPath);
+      fs.unlinkSync(absolutePath);
     }
 
     res.json({
       success: true,
       message: `${
-        item.fileType === "folder" ? "Folder" : "File"
+        stats.isDirectory() ? "Folder" : "File"
       } deleted successfully`,
     });
   } catch (err) {
@@ -218,29 +243,155 @@ router.delete("/files/:id", (req, res) => {
 });
 
 // Download a file
-router.get("/files/:id/download", (req, res) => {
+router.get("/file/download", (req, res) => {
   try {
-    const tree = getFileTree(rootDir);
-    const item = findItemById(tree, req.params.id);
+    const filePath = req.query.path;
+    const absolutePath = getAbsolutePath(filePath);
 
-    if (!item || item.fileType !== "file") {
+    if (!absolutePath) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (!fs.existsSync(absolutePath)) {
       return res.status(404).json({ error: "File not found" });
     }
 
-    const filePath = getItemPath(item, tree);
-    if (!filePath) {
-      return res
-        .status(404)
-        .json({ error: "File path could not be determined" });
+    const stats = fs.statSync(absolutePath);
+    if (stats.isDirectory()) {
+      return res.status(400).json({ error: "Cannot download a directory" });
     }
 
-    // Set appropriate headers for download
-    res.setHeader("Content-Disposition", `attachment; filename="${item.name}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${path.basename(absolutePath)}"`
+    );
     res.setHeader("Content-Type", "application/octet-stream");
 
-    // Create read stream and pipe to response
-    const fileStream = fs.createReadStream(filePath);
+    const fileStream = fs.createReadStream(absolutePath);
     fileStream.pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Upload a file
+router.post("/file/upload", (req, res) => {
+  try {
+    if (!req.files || !req.files.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const file = req.files.file;
+    const targetPath = req.body.path || "/";
+    const absolutePath = getAbsolutePath(path.join(targetPath, file.name));
+
+    if (!absolutePath) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    // Ensure the directory exists
+    const dir = path.dirname(absolutePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // Save the file
+    fs.writeFileSync(absolutePath, file.data);
+    res.json({ success: true, message: "File uploaded successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create a new folder
+router.post("/folder/create", (req, res) => {
+  try {
+    const { name, path: targetPath } = req.body;
+    if (!name || !targetPath) {
+      return res.status(400).json({ error: "Name and path are required" });
+    }
+
+    const absolutePath = getAbsolutePath(path.join(targetPath, name));
+
+    if (!absolutePath) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (fs.existsSync(absolutePath)) {
+      return res.status(400).json({ error: "Folder already exists" });
+    }
+
+    fs.mkdirSync(absolutePath, { recursive: true });
+    res.json({ success: true, message: "Folder created successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create a new file
+router.post("/file/create", (req, res) => {
+  try {
+    const { name, path: targetPath, content = "" } = req.body;
+    if (!name || !targetPath) {
+      return res.status(400).json({ error: "Name and path are required" });
+    }
+
+    const absolutePath = getAbsolutePath(path.join(targetPath, name));
+
+    if (!absolutePath) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (fs.existsSync(absolutePath)) {
+      return res.status(400).json({ error: "File already exists" });
+    }
+
+    // Ensure the directory exists
+    const dir = path.dirname(absolutePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    fs.writeFileSync(absolutePath, content, "utf8");
+    res.json({ success: true, message: "File created successfully" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Move a file or folder
+router.post("/file/move", (req, res) => {
+  try {
+    const { sourcePath, destinationPath } = req.body;
+    if (!sourcePath || !destinationPath) {
+      return res
+        .status(400)
+        .json({ error: "Source and destination paths are required" });
+    }
+
+    const sourceAbsolutePath = getAbsolutePath(sourcePath);
+    const destinationAbsolutePath = getAbsolutePath(destinationPath);
+
+    if (!sourceAbsolutePath || !destinationAbsolutePath) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+
+    if (!fs.existsSync(sourceAbsolutePath)) {
+      return res.status(404).json({ error: "Source path not found" });
+    }
+
+    if (fs.existsSync(destinationAbsolutePath)) {
+      return res.status(400).json({ error: "Destination path already exists" });
+    }
+
+    // Ensure the destination directory exists
+    const destDir = path.dirname(destinationAbsolutePath);
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    fs.renameSync(sourceAbsolutePath, destinationAbsolutePath);
+    res.json({ success: true, message: "Item moved successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -7,6 +7,11 @@ import configRoute from "./controller/settings.js";
 import config from "./config.json" assert { type: "json" };
 import filesRoute from "./controller/files.js";
 import { initFileWatcher } from "./utils/fileWatcher.js";
+import expressFileUpload from "express-fileupload";
+import pluginRoute from "./controller/plugin.js";
+import worldRoute from "./controller/world.js";
+import versionRoute from "./controller/version.js";
+import systemUsage from "./utils/system-usage.js";
 
 const app = express();
 const server = createServer(app);
@@ -21,12 +26,17 @@ const io = new Server(server, {
 });
 
 app.use(express.json());
+app.use(expressFileUpload());
+app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url} - ${req.ip}`);
   next();
 });
 app.use("/api", filesRoute);
+app.use("/api", pluginRoute);
+app.use("/api", worldRoute);
+app.use("/api", versionRoute);
 initFileWatcher(io);
 
 let commandHistory = [];
@@ -104,14 +114,22 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/health", (req, res) => {
-  res.json({
-    status: "ok",
-    uptime: process.uptime(),
-    connections: io.engine.clientsCount,
-    serverStatus: isServerOnline() ? "online" : "offline",
-    memoryUsage: process.memoryUsage(),
-  });
+app.get("/health", async (req, res) => {
+  systemUsage()
+    .then((data) => {
+      res.json({
+        status: "ok",
+        uptime: process.uptime(),
+        connections: io.engine.clientsCount,
+        serverStatus: isServerOnline() ? "online" : "offline",
+        memoryUsage: process.memoryUsage(),
+        systemUsage: data,
+      });
+    })
+    .catch((err) => {
+      console.log(err);
+      res.json({ error: true, message: err });
+    });
 });
 
 app.use(configRoute);

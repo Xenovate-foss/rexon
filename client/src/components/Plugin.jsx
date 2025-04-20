@@ -1,11 +1,17 @@
-export default function Plugin({ name, version }) {
+import { Package } from "lucide-react";
+
+const Plugin = ({ name, version }) => {
   return (
-    <div className="flex justify-between p-3 border border-gray-200 rounded">
-      <span>{name}</span>
-      <span>Version: {version}</span>
-      <span className="text-white rounded smp py-1 px-2 shadow-sm bg-red-800">
-        Delete
-      </span>
+    <div className="flex items-center p-4">
+      <div className="bg-blue-100 p-2 rounded-md mr-4">
+        <Package className="text-blue-600" size={20} />
+      </div>
+      <div>
+        <h3 className="font-medium text-gray-800">{name}</h3>
+        <p className="text-sm text-gray-500">Version: {version}</p>
+      </div>
     </div>
   );
-}
+};
+
+export default Plugin;

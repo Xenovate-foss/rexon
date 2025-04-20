@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import {
   FolderClosed,
   FolderOpen,
@@ -20,6 +21,8 @@ import {
   FolderSymlink,
   Plus,
   Loader,
+  Upload,
+  FolderPlus,
 } from "lucide-react";
 
 import axios from "axios";
@@ -113,7 +116,7 @@ const FileContextMenu = ({
             <li
               className="px-4 py-3 hover:bg-gray-700 flex items-center gap-3 cursor-pointer text-red-400"
               onClick={() => {
-                onDelete(item);
+                handleDelete(item);
                 onClose();
               }}
             >
@@ -128,7 +131,7 @@ const FileContextMenu = ({
   // Desktop context menu
   return (
     <div
-      className="absolute bg-gray-800 text-white rounded shadow-lg z-10 overflow-hidden border border-gray-700"
+      className="fixed bg-gray-800 text-white rounded shadow-lg z-10 overflow-hidden border border-gray-700"
       style={{ top: y, left: x }}
     >
       <ul className="py-1">
@@ -154,12 +157,14 @@ const FileContextMenu = ({
         </li>
         <li
           className="px-4 py-2 hover:bg-gray-700 flex items-center gap-2 cursor-pointer text-red-400"
-          onClick={() => {
-            onDelete(item);
-            onClose();
-          }}
+          
         >
-          <Trash2 size={14} /> Delete
+          <button onClick={() => {
+                      console.log(item + " deleting")
+                                  handleDelete(item);
+                                              onClose();
+                                                        }}><Trash2 size={14} /> Delete
+                                                        </button>
         </li>
       </ul>
     </div>
@@ -172,18 +177,33 @@ const FileEditor = ({ file, onClose, onSave, isMobile }) => {
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  useEffect(() => {
+    // Update content if file changes
+    setContent(file.content || "");
+    setIsDirty(false);
+  }, [file.id, file.content]);
+
   const handleContentChange = (e) => {
     setContent(e.target.value);
     setIsDirty(true);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
+  const handleSave = async (filePath, newContent) => {
     try {
-      await onSave(file.id, content);
-      setIsDirty(false);
+      setIsSaving(true);
+  
+      // Send the updated content to the server
+      await axios.post(`/api/updatefile?path=${filePath}`, {
+        content: newContent,
+      });
+  
+      // If the selected file is still open, update its content
+      if (selectedFile && selectedFile.path === filePath) {
+        setSelectedFile({ ...selectedFile, content: newContent });
+      }
     } catch (error) {
-      console.error("Error in handleSave:", error);
+      console.error("Failed to save file:", error);
+      alert("Failed to save file. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -260,21 +280,13 @@ const FileEditor = ({ file, onClose, onSave, isMobile }) => {
 // FileItem component to handle both files and folders
 const FileItem = ({
   item,
-  level = 0,
   onSelectFile,
   isMobile,
   onContextMenu,
+  onNavigateToFolder,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const itemRef = useRef(null);
-
-  const toggleFolder = (e) => {
-    e.stopPropagation();
-    if (item.fileType === "folder") {
-      setIsOpen(!isOpen);
-    }
-  };
 
   const handleContextMenu = (e) => {
     e.preventDefault();
@@ -291,6 +303,7 @@ const FileItem = ({
   };
 
   const handleFileSelect = (e) => {
+    e.preventDefault();
     e.stopPropagation();
     if (item.fileType === "file") {
       onSelectFile(item);
@@ -298,15 +311,16 @@ const FileItem = ({
   };
 
   const handleClick = (e) => {
+    e.preventDefault();
     if (isMobile) {
       if (item.fileType === "folder") {
-        toggleFolder(e);
+        onNavigateToFolder(item.path);
       } else {
         handleContextMenu(e);
       }
     } else {
       if (item.fileType === "folder") {
-        toggleFolder(e);
+        onNavigateToFolder(item.path);
       } else {
         handleFileSelect(e);
       }
@@ -314,69 +328,40 @@ const FileItem = ({
   };
 
   return (
-    <>
-      <div
-        ref={itemRef}
-        className={`flex items-center w-full cursor-pointer ${
-          isHovered ? "bg-gray-200" : ""
-        }`}
-        onClick={handleClick}
-        onContextMenu={handleContextMenu}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <div
-          className="flex items-center flex-grow px-3 py-2 overflow-hidden"
-          style={{ paddingLeft: `${level * 16 + 8}px` }}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {item.fileType === "folder" ? (
-              <span className="flex items-center gap-1 flex-shrink-0">
-                {isOpen ? (
-                  <ChevronDown size={14} className="text-gray-500" />
-                ) : (
-                  <ChevronRight size={14} className="text-gray-500" />
-                )}
-                {isOpen ? (
-                  <FolderOpen className="text-blue-500" size={16} />
-                ) : (
-                  <FolderClosed className="text-blue-500" size={16} />
-                )}
-              </span>
-            ) : (
-              <span className="ml-5 flex-shrink-0">
-                {getFileIcon(item.extension)}
-              </span>
-            )}
-            <span className="truncate text-gray-900">{item.name}</span>
-          </div>
+    <div
+      ref={itemRef}
+      className={`flex items-center w-full cursor-pointer ${
+        isHovered ? "bg-gray-200" : ""
+      }`}
+      onClick={handleClick}
+      onContextMenu={handleContextMenu}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="flex items-center flex-grow px-3 py-2 overflow-hidden">
+        <div className="flex items-center gap-2 min-w-0">
+          {item.fileType === "folder" ? (
+            <span className="flex items-center gap-1 flex-shrink-0">
+              <ChevronRight size={14} className="text-gray-500" />
+              <FolderClosed className="text-blue-500" size={16} />
+            </span>
+          ) : (
+            <span className="ml-5 flex-shrink-0">
+              {getFileIcon(item.extension)}
+            </span>
+          )}
+          <span className="truncate text-gray-900">{item.name}</span>
         </div>
-
-        {/* Only show size and date on larger screens */}
-        {item.fileType === "file" && !isMobile && (
-          <div className="flex items-center gap-4 px-4 text-xs text-gray-500">
-            <span className="w-24 text-right">{item.size}</span>
-            <span className="w-24 text-right">{item.modifiedAt}</span>
-          </div>
-        )}
       </div>
 
-      {/* Render children if folder is open */}
-      {item.fileType === "folder" && isOpen && item.children && (
-        <div className="w-full">
-          {item.children.map((child) => (
-            <FileItem
-              key={child.id}
-              item={child}
-              level={level + 1}
-              onSelectFile={onSelectFile}
-              isMobile={isMobile}
-              onContextMenu={onContextMenu}
-            />
-          ))}
+      {/* Only show size and date on larger screens */}
+      {item.fileType === "file" && !isMobile && (
+        <div className="flex items-center gap-4 px-4 text-xs text-gray-500">
+          <span className="w-24 text-right">{item.size || "N/A"}</span>
+          <span className="w-24 text-right">{item.modifiedAt || "N/A"}</span>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
@@ -400,53 +385,182 @@ const useIsMobile = () => {
   return isMobile;
 };
 
-// Find a file by id in the file tree
-const findFileById = (tree, id) => {
-  for (const item of tree) {
-    if (item.id === id) {
-      return item;
-    }
-    if (item.fileType === "folder" && item.children) {
-      const found = findFileById(item.children, id);
-      if (found) return found;
-    }
-  }
-  return null;
-};
+// Modal component for creating files/folders and uploading
+const ActionModal = ({ isOpen, onClose, type, currentPath, onSuccess }) => {
+  const [name, setName] = useState("");
+  const [file, setFile] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const fileInputRef = useRef(null);
 
-// Update a file's content in the file tree
-const updateFileContent = (tree, id, newContent) => {
-  return tree.map((item) => {
-    if (item.id === id) {
-      return { ...item, content: newContent };
+  // Reset form when modal opens or type changes
+  useEffect(() => {
+    if (isOpen) {
+      setName("");
+      setFile(null);
+      setIsSubmitting(false);
     }
-    if (item.fileType === "folder" && item.children) {
-      return {
-        ...item,
-        children: updateFileContent(item.children, id, newContent),
-      };
-    }
-    return item;
-  });
-};
+  }, [isOpen, type]);
 
-// Remove an item from the file tree
-const removeItemById = (tree, id) => {
-  return tree
-    .filter((item) => item.id !== id)
-    .map((item) => {
-      if (item.fileType === "folder" && item.children) {
-        return {
-          ...item,
-          children: removeItemById(item.children, id),
-        };
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      if (type === "upload") {
+        if (!file) return;
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("path", currentPath);
+
+        await axios.post("/api/files/upload", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+      } else if (type === "newFolder") {
+        await axios.post("/api/files/folder", {
+          name,
+          path: currentPath,
+        });
+      } else if (type === "newFile") {
+        await axios.post("/api/files/file", {
+          name,
+          path: currentPath,
+          content: "",
+        });
       }
-      return item;
-    });
+
+      onSuccess();
+      onClose();
+    } catch (error) {
+      console.error("Operation failed:", error);
+      alert("Operation failed. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const handleFileChange = (e) => {
+    if (e.target.files?.length) {
+      setFile(e.target.files[0]);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-gray-900 bg-opacity-50 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-lg shadow-lg w-full max-w-md overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+          <h3 className="font-medium">
+            {type === "upload"
+              ? "Upload File"
+              : type === "newFolder"
+              ? "New Folder"
+              : "New File"}
+          </h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded">
+            <X size={16} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-4">
+          {type === "upload" ? (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select File
+              </label>
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded mr-2"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Choose File
+                </button>
+                <span className="text-sm text-gray-500 truncate">
+                  {file ? file.name : "No file selected"}
+                </span>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                {type === "newFolder" ? "Folder Name" : "File Name"}
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder={
+                  type === "newFolder" ? "Enter folder name" : "Enter file name"
+                }
+                required
+              />
+            </div>
+          )}
+
+          <div className="flex justify-end space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={
+                isSubmitting ||
+                (type === "upload" && !file) ||
+                (type !== "upload" && !name)
+              }
+              className={`px-4 py-2 rounded ${
+                isSubmitting ||
+                (type === "upload" && !file) ||
+                (type !== "upload" && !name)
+                  ? "bg-blue-300 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 text-white"
+              }`}
+            >
+              {isSubmitting ? (
+                <div className="flex items-center">
+                  <Loader size={14} className="animate-spin mr-2" />
+                  <span>
+                    {type === "upload"
+                      ? "Uploading..."
+                      : type === "newFolder"
+                      ? "Creating..."
+                      : "Creating..."}
+                  </span>
+                </div>
+              ) : (
+                <span>
+                  {type === "upload"
+                    ? "Upload"
+                    : type === "newFolder"
+                    ? "Create Folder"
+                    : "Create File"}
+                </span>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 };
 
 const FileManager = () => {
-  const [fileTree, setFileTree] = useState([]);
+  const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -457,8 +571,28 @@ const FileManager = () => {
     y: 0,
     item: null,
   });
+  const [modal, setModal] = useState({
+    isOpen: false,
+    type: null,
+  });
+
   const isMobile = useIsMobile();
   const fileManagerRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Parse the current path from URL query parameters
+  const getPathFromSearch = () => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("path")) {
+      return params.get("path");
+    } else {
+      return "/";
+    }
+  };
+
+  // Get current path from URL or use default
+  const currentPath = getPathFromSearch() || "/";
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -477,22 +611,37 @@ const FileManager = () => {
     };
   }, [contextMenu.visible]);
 
-  // Load file tree data
+  // Load files for the current path
   useEffect(() => {
-    const loadData = async () => {
+    const loadFiles = async () => {
       try {
         setIsLoading(true);
-        const response = await axios.get("/api/files");
-        setFileTree(response.data);
+        const response = await axios.get(
+          `/api/files?path=${encodeURIComponent(currentPath)}`
+        );
+        setFiles(response.data);
       } catch (error) {
-        console.error("Failed to fetch file tree:", error);
+        console.error("Failed to fetch files:", error);
+        // If the path doesn't exist, fallback to root
+        if (
+          error.response &&
+          error.response.status === 404 &&
+          currentPath !== "/"
+        ) {
+          navigate("?path=/");
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadData();
-  }, []);
+    loadFiles();
+  }, [currentPath, navigate]);
+
+  const handleNavigateToFolder = (path) => {
+    // Update URL with the new path
+    navigate(`?path=${encodeURIComponent(path)}`);
+  };
 
   const handleSelectFile = (file) => {
     setSelectedFile(file);
@@ -504,21 +653,16 @@ const FileManager = () => {
     setSelectedFile(null);
   };
 
-  const handleSaveFile = async (fileId, newContent) => {
+  const handleSaveFile = async (filePath, newContent) => {
     try {
-      // For use in FileEditor component
       setIsSaving(true);
 
       // Send the updated content to the server
-      await axios.post(`/api/files/${fileId}`, {
+      await axios.post(`/api/files/?path=${filePath}`, {
         content: newContent,
       });
 
-      // Update the file tree with new content
-      const updatedTree = updateFileContent(fileTree, fileId, newContent);
-      setFileTree(updatedTree);
-
-      // Also update the selected file if it's still open
+      // If the selected file is still open, update its content
       if (selectedFile && selectedFile.id === fileId) {
         setSelectedFile({ ...selectedFile, content: newContent });
       }
@@ -526,7 +670,6 @@ const FileManager = () => {
       console.error("Failed to save file:", error);
       alert("Failed to save file. Please try again.");
     } finally {
-      // For use in FileEditor component
       setIsSaving(false);
     }
   };
@@ -542,12 +685,15 @@ const FileManager = () => {
 
   const handleDelete = async (item) => {
     try {
+      console.log(item);
       // Send delete request to the server
-      await axios.delete(`/api/files/${item.id}`);
+      await axios.delete(`/api/file?path=${item.path}`);
 
-      // Remove the item from the file tree
-      const updatedTree = removeItemById(fileTree, item.id);
-      setFileTree(updatedTree);
+      // Refresh the file list
+      const response = await axios.get(
+        `/api/files?path=${encodeURIComponent(currentPath)}`
+      );
+      setFiles(response.data);
 
       // Close the editor if the deleted file was open
       if (selectedFile && selectedFile.id === item.id) {
@@ -582,6 +728,53 @@ const FileManager = () => {
     }
   };
 
+  const refreshFiles = async () => {
+    try {
+      setIsLoading(true);
+      const response = await axios.get(
+        `/api/files?path=${encodeURIComponent(currentPath)}`
+      );
+      setFiles(response.data);
+    } catch (error) {
+      console.error("Failed to refresh files:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openModal = (type) => {
+    setModal({
+      isOpen: true,
+      type,
+    });
+  };
+
+  const closeModal = () => {
+    setModal({
+      isOpen: false,
+      type: null,
+    });
+  };
+
+  // Generate breadcrumbs from current path
+  const generateBreadcrumbs = () => {
+    const parts = currentPath.split("/").filter(Boolean);
+    const breadcrumbs = [{ name: "Root", path: "/" }];
+
+    let currentBuildPath = "";
+    parts.forEach((part) => {
+      currentBuildPath += `/${part}`;
+      breadcrumbs.push({
+        name: part,
+        path: currentBuildPath,
+      });
+    });
+
+    return breadcrumbs;
+  };
+
+  const breadcrumbs = generateBreadcrumbs();
+
   // Mobile view: show either file browser or editor, not both
   if (isMobile && showEditor && selectedFile) {
     return (
@@ -612,9 +805,46 @@ const FileManager = () => {
         {/* Toolbar */}
         <div className="flex items-center justify-between text-sm py-2 px-3 bg-gray-100 border-b border-gray-300 flex-shrink-0">
           <div className="font-medium">Files</div>
-          <button className="p-1 hover:bg-gray-200 rounded">
-            <Plus size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="p-1 hover:bg-gray-200 rounded"
+              title="Upload"
+              onClick={() => openModal("upload")}
+            >
+              <Upload size={16} />
+            </button>
+            <button
+              className="p-1 hover:bg-gray-200 rounded"
+              title="New File"
+              onClick={() => openModal("newFile")}
+            >
+              <FilePlus size={16} />
+            </button>
+            <button
+              className="p-1 hover:bg-gray-200 rounded"
+              title="New Folder"
+              onClick={() => openModal("newFolder")}
+            >
+              <FolderPlus size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Breadcrumbs */}
+        <div className="flex items-center text-xs text-gray-600 py-2 px-3 bg-gray-50 border-b border-gray-200 flex-shrink-0 overflow-x-auto">
+          <div className="flex items-center">
+            {breadcrumbs.map((crumb, index) => (
+              <React.Fragment key={crumb.path}>
+                {index > 0 && <span className="mx-1">/</span>}
+                <button
+                  className="hover:text-blue-500 truncate"
+                  onClick={() => handleNavigateToFolder(crumb.path)}
+                >
+                  {crumb.name}
+                </button>
+              </React.Fragment>
+            ))}
+          </div>
         </div>
 
         {/* Column headers - hide detail columns on mobile */}
@@ -628,25 +858,26 @@ const FileManager = () => {
           )}
         </div>
 
-        {/* File tree - THIS IS THE MAIN SCROLLABLE CONTAINER */}
+        {/* File list - Main scrollable container */}
         <div className="flex-grow overflow-auto min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center h-full text-gray-500">
               <Loader size={24} className="animate-spin mr-2" />
               <span>Loading files...</span>
             </div>
-          ) : fileTree.length === 0 ? (
+          ) : files.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500">
-              No files found
+              This folder is empty
             </div>
           ) : (
-            fileTree.map((item) => (
+            files.map((item) => (
               <FileItem
                 key={item.id}
                 item={item}
                 onSelectFile={handleSelectFile}
                 isMobile={isMobile}
                 onContextMenu={handleContextMenu}
+                onNavigateToFolder={handleNavigateToFolder}
               />
             ))
           )}
@@ -678,6 +909,15 @@ const FileManager = () => {
         onDownload={handleDownload}
         isMobile={isMobile}
         item={contextMenu.item}
+      />
+
+      {/* Action Modals */}
+      <ActionModal
+        isOpen={modal.isOpen}
+        type={modal.type}
+        onClose={closeModal}
+        currentPath={currentPath}
+        onSuccess={refreshFiles}
       />
     </div>
   );

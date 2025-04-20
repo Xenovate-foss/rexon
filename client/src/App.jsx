@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   EthernetPort,
   Grid2x2Plus,
+  BookUp2
 } from "lucide-react";
 import Console from "./pages/Console";
 import FileManager from "./pages/FileManager";
@@ -25,6 +26,7 @@ import Plugins from "./pages/Plugins";
 import PluginExplorer from "./components/PluginExplorer";
 import Worlds from "./pages/Worlds";
 import Settings from "./pages/Settings";
+import Versions from "./pages/Version"
 /*const FileManager = () => (
   <div>
     <p className="text-gray-700">Browse, upload, and manage your files</p>
@@ -68,6 +70,7 @@ const SidebarContent = () => {
     { name: "Plugin Explorer", icon: <Grid2x2Plus />, path: "plugin-explorer" },
     { name: "Worlds", icon: <Earth />, path: "worlds" },
     { name: "Port forward", icon: <EthernetPort />, path: "port-forward" },
+    { name: "Version manager", icon: <BookUp2 />, path: "versions"},
     { name: "Settings", icon: <SettingsIcon />, path: "settings" },
   ];
 
@@ -188,6 +191,7 @@ const SidebarContent = () => {
               <Route path="/port-forward" element={<PortForward />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/plugin-explorer" element={<PluginExplorer />} />
+              <Route path="/versions" element={<Versions />} />
             </Routes>
           </div>
         </div>

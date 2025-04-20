@@ -7,6 +7,9 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  Plus,
+  Check,
+  AlertCircle,
 } from "lucide-react";
 
 export default function PluginExplorer() {
@@ -14,6 +17,8 @@ export default function PluginExplorer() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [installing, setInstalling] = useState({});
+  const [installStatus, setInstallStatus] = useState({});
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -45,6 +50,65 @@ export default function PluginExplorer() {
       setError("Failed to fetch plugins. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Add new function to install a plugin
+  const installPlugin = async (plugin) => {
+    try {
+      setInstalling((prev) => ({ ...prev, [plugin.project_id]: true }));
+      setInstallStatus((prev) => ({
+        ...prev,
+        [plugin.project_id]: {
+          status: "installing",
+          message: "Installing plugin...",
+        },
+      }));
+
+      // Call the API endpoint to add the plugin
+      const response = await axios.post(`/api/addplugin/${plugin.slug}`);
+
+      if (response.data.success) {
+        setInstallStatus((prev) => ({
+          ...prev,
+          [plugin.project_id]: {
+            status: "success",
+            message: "Plugin installed successfully!",
+          },
+        }));
+      } else if (response.data.warning) {
+        setInstallStatus((prev) => ({
+          ...prev,
+          [plugin.project_id]: {
+            status: "warning",
+            message: response.data.message || "Plugin installed with warnings.",
+          },
+        }));
+      }
+
+      // Clear the status after 5 seconds
+      setTimeout(() => {
+        setInstallStatus((prev) => {
+          const newStatus = { ...prev };
+          delete newStatus[plugin.project_id];
+          return newStatus;
+        });
+      }, 5000);
+    } catch (error) {
+      console.error("Error installing plugin:", error);
+      setInstallStatus((prev) => ({
+        ...prev,
+        [plugin.project_id]: {
+          status: "error",
+          message: error.response?.data?.message || "Failed to install plugin.",
+        },
+      }));
+    } finally {
+      setInstalling((prev) => {
+        const newInstalling = { ...prev };
+        delete newInstalling[plugin.project_id];
+        return newInstalling;
+      });
     }
   };
 
@@ -214,6 +278,29 @@ export default function PluginExplorer() {
                       </div>
 
                       <div className="flex items-center gap-2">
+                        {/* Install button */}
+                        <button
+                          onClick={() => installPlugin(plugin)}
+                          disabled={installing[plugin.project_id]}
+                          className={`px-3 py-1 rounded text-sm font-medium flex items-center gap-1 ${
+                            installing[plugin.project_id]
+                              ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                              : "bg-blue-500 text-white hover:bg-blue-600"
+                          }`}
+                        >
+                          {installing[plugin.project_id] ? (
+                            <>
+                              <div className="w-4 h-4 rounded-full border-2 border-gray-300 border-t-gray-500 animate-spin"></div>
+                              Installing
+                            </>
+                          ) : (
+                            <>
+                              <Plus size={16} />
+                              Install
+                            </>
+                          )}
+                        </button>
+
                         <a
                           href={`https://modrinth.com/plugin/${plugin.slug}`}
                           target="_blank"
@@ -224,6 +311,28 @@ export default function PluginExplorer() {
                         </a>
                       </div>
                     </div>
+
+                    {/* Installation status message */}
+                    {installStatus[plugin.project_id] && (
+                      <div
+                        className={`mt-3 p-2 rounded text-sm flex items-center gap-2 ${
+                          installStatus[plugin.project_id].status === "success"
+                            ? "bg-green-50 text-green-700"
+                            : installStatus[plugin.project_id].status ===
+                              "warning"
+                            ? "bg-yellow-50 text-yellow-700"
+                            : "bg-red-50 text-red-700"
+                        }`}
+                      >
+                        {installStatus[plugin.project_id].status ===
+                        "success" ? (
+                          <Check size={16} />
+                        ) : (
+                          <AlertCircle size={16} />
+                        )}
+                        {installStatus[plugin.project_id].message}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))
