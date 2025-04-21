@@ -18,7 +18,7 @@ import {
   ChevronLeft,
   EthernetPort,
   Grid2x2Plus,
-  BookUp2
+  BookUp2,
 } from "lucide-react";
 import Console from "./pages/Console";
 import FileManager from "./pages/FileManager";
@@ -26,35 +26,8 @@ import Plugins from "./pages/Plugins";
 import PluginExplorer from "./components/PluginExplorer";
 import Worlds from "./pages/Worlds";
 import Settings from "./pages/Settings";
-import Versions from "./pages/Version"
-/*const FileManager = () => (
-  <div>
-    <p className="text-gray-700">Browse, upload, and manage your files</p>
-    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-      <div className="p-3 border border-gray-200 rounded">Documents</div>
-      <div className="p-3 border border-gray-200 rounded">Images</div>
-      <div className="p-3 border border-gray-200 rounded">Downloads</div>
-    </div>
-  </div>
-);*/
-
-const PortForward = () => (
-  <div>
-    <p className="text-gray-700">Configure network port forwarding</p>
-    <div className="mt-4 space-y-2">
-      <div className="grid grid-cols-3 p-3 border border-gray-200 rounded">
-        <span>80 → 8080</span>
-        <span>HTTP</span>
-        <span className="text-green-500">Active</span>
-      </div>
-      <div className="grid grid-cols-3 p-3 border border-gray-200 rounded">
-        <span>443 → 8443</span>
-        <span>HTTPS</span>
-        <span className="text-green-500">Active</span>
-      </div>
-    </div>
-  </div>
-);
+import Versions from "./pages/Version";
+import PortForward from "./pages/PortForward";
 
 const SidebarContent = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -70,7 +43,7 @@ const SidebarContent = () => {
     { name: "Plugin Explorer", icon: <Grid2x2Plus />, path: "plugin-explorer" },
     { name: "Worlds", icon: <Earth />, path: "worlds" },
     { name: "Port forward", icon: <EthernetPort />, path: "port-forward" },
-    { name: "Version manager", icon: <BookUp2 />, path: "versions"},
+    { name: "Version manager", icon: <BookUp2 />, path: "versions" },
     { name: "Settings", icon: <SettingsIcon />, path: "settings" },
   ];
 
