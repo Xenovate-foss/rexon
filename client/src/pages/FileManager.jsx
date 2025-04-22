@@ -410,7 +410,7 @@ const FileBrowser = () => {
   };
 
   return (
-    <div className="bg-gray-50 grid sm:grid-col-2 min-h-screen p-4">
+    <div className="bg-gray-50  min-h-screen p-4">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold text-gray-800 mb-6">File Browser</h1>
 
