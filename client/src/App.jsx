@@ -19,6 +19,7 @@ import {
   EthernetPort,
   Grid2x2Plus,
   BookUp2,
+  Home
 } from "lucide-react";
 import Console from "./pages/Console";
 import FileManager from "./pages/FileManager";
@@ -28,6 +29,7 @@ import Worlds from "./pages/Worlds";
 import Settings from "./pages/Settings";
 import Versions from "./pages/Version";
 import PortForward from "./pages/PortForward";
+import Dashboard from "./pages/Dashboard"
 
 const SidebarContent = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -37,6 +39,7 @@ const SidebarContent = () => {
   const currentPath = location.pathname.substring(1) || "home";
 
   const menuItems = [
+    { name: "Dashboard", icon: <Home />, path: ""},
     { name: "Console", icon: <Terminal />, path: "console" },
     { name: "File Manager", icon: <FolderClosed />, path: "file-manager" },
     { name: "Plugins", icon: <Blocks />, path: "plugins" },
@@ -156,7 +159,7 @@ const SidebarContent = () => {
           </div>
           <div className="bg-white p-4 sm:p-6 rounded-lg shadow">
             <Routes>
-              <Route path="/" element={<Console />} />
+              <Route path="/" element={<Dashboard />} />
               <Route path="/console" element={<Console />} />
               <Route path="/file-manager" element={<FileManager />} />
               <Route path="/plugins" element={<Plugins />} />

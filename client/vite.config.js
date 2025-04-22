@@ -9,6 +9,11 @@ export default defineConfig({
   server: {
     proxy: {
       "/api/": "https://wzpmff-3000.csb.app",
+      '/socket.io': {
+        target: 'https://wzpmff-3000.csb.app', // Your Socket.io server address
+        changeOrigin: true,
+        ws: true, // Important: This enables WebSocket proxying
+      }
     },
   },
   resolve: {

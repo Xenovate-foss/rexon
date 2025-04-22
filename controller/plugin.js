@@ -24,7 +24,7 @@ function getPluginInfo(jarFilePath) {
     const zip = new admZip(jarFilePath);
 
     // Try to find the plugin.yml file
-    const pluginYmlEntry = zip.getEntry("plugin.yml");
+    const pluginYmlEntry = zip.getEntry("plugin.yml") || zip.getEntry("paper-plugin.yml") || zip.getEntry("spigot-plugin.yml") || zip.getEntry("bukkit-plugin.yml");
 
     if (!pluginYmlEntry) {
       throw new Error(

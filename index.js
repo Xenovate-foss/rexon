@@ -114,7 +114,7 @@ app.get("/", (req, res) => {
   });
 });
 
-app.get("/health", async (req, res) => {
+app.get("/api/health", async (req, res) => {
   systemUsage()
     .then((data) => {
       res.json({
@@ -147,7 +147,67 @@ io.on("connection", (socket) => {
       "Type 'help' for available commands.\r\n\x1b[36m> \x1b[0m"
   );
   socket.emit("server:status", isServerOnline());
+  socket.emit(
+    "server:output",
+    "\r\n\x1b[97m[\x1b[32mServer\x1b[97m]\x1b[0m: Connected to Minecraft server console!\r\n" +
+      `\x1b[97m[\x1b[33mStatus\x1b[97m]\x1b[0m: Server is ${
+        isServerOnline() ? "\x1b[32mONLINE" : "\x1b[31mOFFLINE"
+      }\x1b[0m\r\n` +
+      "Type 'help' for available commands.\r\n\x1b[36m> \x1b[0m"
+  );
+  socket.emit("server:status", isServerOnline());
+  
+  // Send initial health data
+  systemUsage()
+    .then((data) => {
+      socket.emit("server:health", {
+        status: "ok",
+        uptime: process.uptime(),
+        connections: io.engine.clientsCount,
+        serverStatus: isServerOnline() ? "online" : "offline",
+        memoryUsage: process.memoryUsage(),
+        systemUsage: data,
+      });
+    })
+    .catch((err) => {
+      console.log("Error getting system usage:", err);
+    });
 
+  // Set up health update interval - 1000ms (1 second) is a more reasonable interval
+  const healthInterval = setInterval(() => {
+    systemUsage()
+      .then((data) => {
+        socket.emit("server:health", {
+          status: "ok",
+          uptime: process.uptime(),
+          connections: io.engine.clientsCount,
+          serverStatus: isServerOnline() ? "online" : "offline",
+          memoryUsage: process.memoryUsage(),
+          systemUsage: data,
+        });
+      })
+      .catch((err) => {
+        console.log("Error getting system usage:", err);
+      });
+  }, 1000); // Update every second instead of every 10ms
+
+  // Add event handler for client requesting health data
+  socket.on("client:requestHealth", () => {
+    systemUsage()
+      .then((data) => {
+        socket.emit("server:health", {
+          status: "ok",
+          uptime: process.uptime(),
+          connections: io.engine.clientsCount,
+          serverStatus: isServerOnline() ? "online" : "offline",
+          memoryUsage: process.memoryUsage(),
+          systemUsage: data,
+        });
+      })
+      .catch((err) => {
+        console.log("Error getting system usage:", err);
+      });
+  });
   socket.on("server:execute", (data) => {
     if (!data?.cmd) {
       socket.emit(
