@@ -1,10 +1,8 @@
-import { Router } from "express";
+ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "node:url";
 import crypto from "crypto"; // For generating unique IDs
-import { isArchiveFileSync } from "../utils/fileType.js";
-import { extractArchive } from "../utils/unarchiver.js";
 
 const router = Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -58,7 +56,6 @@ function getFileTree(dirPath) {
       size: (stats.size / 1024 / 1024).toFixed(1) + " MB",
       modifiedAt: new Date(stats.mtime).toISOString().split("T")[0],
       binary: isBinary,
-      isArchive: isArchiveFileSync(fullPath),
     };
   });
 }
@@ -280,11 +277,11 @@ router.get("/file/download", (req, res) => {
 // Upload a file
 router.post("/file/upload", (req, res) => {
   try {
-    if (!req.files || !req.files.files) {
+    if (!req.files || !req.files.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
 
-    const file = req.files.files;
+    const file = req.files.file;
     const targetPath = req.body.path || "/";
     const absolutePath = getAbsolutePath(path.join(targetPath, file.name));
 
@@ -400,47 +397,20 @@ router.post("/file/move", (req, res) => {
   }
 });
 
-router.post("/file/unarchive", (req, res) => {
-  const { path } = req.query;
-  let fullPath = `./server/${path}`;
-  if (!path) {
-    return res.status(400).json({ error: true, message: "No path specified" });
-  }
-
-  try {
-    const isArchive = isArchiveFileSync(fullPath);
-    if (!isArchive) {
-      return res
-        .status(400)
-        .json({ error: true, message: "Not an archive file" });
-    }
-
-    // Get the directory where the archive is located
-    const archiveDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
-    // Get just the filename without extension
-    const archiveName = fullPath.split("/").pop().split(".")[0];
-    // Create the full extraction path
-    const extractionPath = `${archiveDir}/${archiveName}`;
-
-    extractArchive(fullPath, extractionPath)
-      .then((data) => {
-        console.log(data);
-        res.json({ success: true, message: "File extracted successfully" });
-      })
-      .catch((err) => {
-        console.error("Extraction error:", err);
-        res.status(500).json({
-          error: true,
-          message: `Extraction failed: ${err.message || err}`,
-        });
-      });
-  } catch (error) {
-    console.error("Server error:", error);
-    res.status(500).json({
-      error: true,
-      message: `Server error: ${error.message || error}`,
-    });
-  }
-});
-
 export default router;
+
+backend routes ^
+                           / \
+
+================================
+create a react component for it
+must responsive
+color
+primary white
+secondary blue
+ordinary black gray
+every file or folder must have icon 
+it must user attractive 
+must have loader
+must have breadcrumb for navigation
+etc etc etc etc etc etc etc etc etc etc etc etc 

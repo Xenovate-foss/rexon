@@ -206,6 +206,33 @@ const FileBrowser = () => {
     );
   };
 
+  // handle decompress
+  const extractArchive = async (file) => {
+    try {
+      const response = await axios.post(
+        `/api/file/unarchive?path=${file.path}`
+      );
+
+      if (response.data.error) {
+        setError(response.data.message || "Failed to extract archive");
+        return;
+      }
+
+      // Refresh the file list after extraction
+      fetchFiles(currentPath);
+
+      // Show success message
+      setError(`Successfully extracted ${file.name}`);
+
+      // Clear the error message after 3 seconds
+      setTimeout(() => {
+        setError(null);
+      }, 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to extract archive");
+    }
+  };
+
   // Delete file or folder
   const deleteItem = async (item) => {
     if (!window.confirm(`Are you sure you want to delete ${item.name}?`))
@@ -251,59 +278,62 @@ const FileBrowser = () => {
     e.preventDefault();
     if (uploadFiles.length === 0) return;
 
-    let completed = 0;
-    const totalFiles = uploadFiles.length;
+    // Initialize overall progress
+    setOverallProgress(0);
 
-    for (const file of uploadFiles) {
+    try {
+      // Create a new FormData instance for all files
       const formData = new FormData();
-      formData.append("file", file);
+
+      // Append all files to the form data
+      uploadFiles.forEach((file) => {
+        formData.append("files", file); // Using "files" as the field name (ensure your backend expects this)
+      });
+
+      // Append the current path
       formData.append("path", currentPath);
 
-      try {
-        await axios.post("/api/file/upload", formData, {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-          onUploadProgress: (progressEvent) => {
+      // Make a single request with all files
+      const response = await axios.post("/api/file/upload", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
             const percentCompleted = Math.round(
               (progressEvent.loaded * 100) / progressEvent.total
             );
 
-            setUploadProgress((prev) => ({
-              ...prev,
-              [file.name]: percentCompleted,
-            }));
-
             // Update overall progress
-            const totalProgress =
-              Object.values(uploadProgress).reduce(
-                (acc, curr) => acc + curr,
-                0
-              ) + percentCompleted;
-            setOverallProgress(
-              Math.round((totalProgress / (totalFiles * 100)) * 100)
-            );
-          },
-        });
+            setOverallProgress(percentCompleted);
 
-        completed++;
-        setOverallProgress(Math.round((completed / totalFiles) * 100));
-      } catch (err) {
-        setError(
-          `Failed to upload ${file.name}: ${
-            err.response?.data?.error || err.message
-          }`
-        );
+            // Update individual file progress (approximation based on overall progress)
+            const newProgress = {};
+            uploadFiles.forEach((file) => {
+              newProgress[file.name] = percentCompleted;
+            });
+            setUploadProgress(newProgress);
+          }
+        },
+      });
+
+      // Check response and show success/error
+      if (response.data.error) {
+        setError(response.data.message || "Failed to upload files");
+      } else {
+        // Reset after successful upload
+        setShowUploadModal(false);
+        setUploadFiles([]);
+        setUploadProgress({});
+        setOverallProgress(0);
+        fetchFiles(currentPath);
       }
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to upload files");
+      console.error("Upload error:", err);
     }
 
-    // Reset after all uploads are complete
-    setShowUploadModal(false);
-    setUploadFiles([]);
-    setUploadProgress({});
-    setOverallProgress(0);
-    fetchFiles(currentPath);
-
+    // Reset input field
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -559,6 +589,22 @@ const FileBrowser = () => {
                               Edit
                             </button>
                           )}
+
+                          {/* Add this new button for archive files */}
+                          {file.fileType !== "folder" && file.isArchive && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                extractArchive(file);
+                                setShowFileOptions(null);
+                              }}
+                              className="flex items-center w-full px-4 py-2 text-left text-sm hover:bg-gray-100"
+                            >
+                              <FileArchive className="mr-2 text-purple-500" />
+                              Extract
+                            </button>
+                          )}
+
                           {file.fileType !== "folder" && (
                             <button
                               onClick={(e) => {

@@ -138,25 +138,9 @@ app.use(configRoute);
 io.on("connection", (socket) => {
   console.log("Client connected: " + socket.id);
 
-  socket.emit(
-    "server:output",
-    "\r\n\x1b[97m[\x1b[32mServer\x1b[97m]\x1b[0m: Connected to Minecraft server console!\r\n" +
-      `\x1b[97m[\x1b[33mStatus\x1b[97m]\x1b[0m: Server is ${
-        isServerOnline() ? "\x1b[32mONLINE" : "\x1b[31mOFFLINE"
-      }\x1b[0m\r\n` +
-      "Type 'help' for available commands.\r\n\x1b[36m> \x1b[0m"
-  );
   socket.emit("server:status", isServerOnline());
-  socket.emit(
-    "server:output",
-    "\r\n\x1b[97m[\x1b[32mServer\x1b[97m]\x1b[0m: Connected to Minecraft server console!\r\n" +
-      `\x1b[97m[\x1b[33mStatus\x1b[97m]\x1b[0m: Server is ${
-        isServerOnline() ? "\x1b[32mONLINE" : "\x1b[31mOFFLINE"
-      }\x1b[0m\r\n` +
-      "Type 'help' for available commands.\r\n\x1b[36m> \x1b[0m"
-  );
-  socket.emit("server:status", isServerOnline());
-  
+  socket.emit("server:history", commandHistory);
+
   // Send initial health data
   systemUsage()
     .then((data) => {
@@ -189,6 +173,8 @@ io.on("connection", (socket) => {
       .catch((err) => {
         console.log("Error getting system usage:", err);
       });
+    // send server status
+    socket.emit("server:status", isServerOnline);
   }, 1000); // Update every second instead of every 10ms
 
   // Add event handler for client requesting health data
