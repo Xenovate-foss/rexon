@@ -1,0 +1,8 @@
+
+[agent]
+secret_path = "/project/workspace/utils/playit.toml"
+
+[[tunnels]]
+name = "Minecraft Server"
+proto = "tcp"
+port = [object Object]

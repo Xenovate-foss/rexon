@@ -12,6 +12,9 @@ import pluginRoute from "./controller/plugin.js";
 import worldRoute from "./controller/world.js";
 import versionRoute from "./controller/version.js";
 import systemUsage from "./utils/system-usage.js";
+import { PlayItService } from "./utils/PlayitServiceProvider.js";
+import MinecraftProperties from "./utils/mcPropertise.js";
+import fs from "node:fs";
 
 const app = express();
 const server = createServer(app);
@@ -39,6 +42,93 @@ app.use("/api", worldRoute);
 app.use("/api", versionRoute);
 initFileWatcher(io);
 
+const playItService = new PlayItService({
+  minecraftPort:
+    MinecraftProperties.parse(
+      fs.readFileSync("./server/server.properties", "utf-8")
+    ) || 25565,
+  autoRestart: true,
+  maxRestartAttempts: 3,
+  useSystemd: config.useSystemd,
+  sudoPassword: config.sudoPassword || null, // Be careful with storing sudo password in env
+});
+
+// Handle PlayIt events
+playItService.on("log", (log) => {
+  // You could store logs or broadcast to connected clients
+  io.emit("playit:log", { log });
+  console.log(`[${log.timestamp}] [${log.type}] ${log.message}`);
+});
+
+playItService.on("status_change", ({ status }) => {
+  io.emit("playit:status", { status });
+  console.log(`PlayIt status changed to: ${status}`);
+});
+
+playItService.on("tunnel_created", ({ url }) => {
+  io.emit("playit:tunnel", { url });
+  console.log(`🎮 Minecraft server accessible at: ${url}`);
+});
+
+playItService.on("auth_required", ({ url }) => {
+  io.emit("playit:auth_required", { url });
+  console.log(`⚠️ PlayIt authentication required: ${url}`);
+  // You could send notification email/SMS here
+});
+
+// API endpoints for controlling PlayIt
+app.post("/api/playit/start", async (req, res) => {
+  const result = await playItService.start();
+  res.json(result);
+});
+
+app.post("/api/playit/stop", async (req, res) => {
+  const result = await playItService.stop();
+  res.json(result);
+});
+
+app.post("/api/playit/restart", async (req, res) => {
+  await playItService.stop();
+  const result = await playItService.start();
+  res.json(result);
+});
+
+app.get("/api/playit/status", (req, res) => {
+  res.json({
+    status: playItService.tunnelStatus,
+    tunnelUrl: playItService.tunnelUrl,
+    uptime: playItService.startTime
+      ? Math.floor((Date.now() - playItService.startTime) / 1000)
+      : 0,
+    logs: playItService.logs.slice(-20), // Return last 20 logs
+  });
+});
+
+app.get("/api/playit/check-updates", async (req, res) => {
+  const updates = await playItService.checkForUpdates();
+  res.json(updates);
+});
+
+// Update PlayIt if requested
+app.post("/api/playit/update", async (req, res) => {
+  // Stop service first
+  await playItService.stop();
+
+  // Force update of binary
+  const downloadResult = await playItService.ensurePlayItExists(true);
+
+  // Restart if it was running
+  let startResult = { success: false, message: "Update only, not restarting" };
+  if (req.body.restart) {
+    startResult = await playItService.start();
+  }
+
+  res.json({
+    updateSuccess: downloadResult,
+    restartRequested: !!req.body.restart,
+    restartResult: startResult,
+  });
+});
 let commandHistory = [];
 const MAX_HISTORY_LENGTH = 1000;
 const serverFolder = "./server/";
@@ -279,9 +369,16 @@ server.listen(PORT, "0.0.0.0", () => {
 });
 
 // Graceful shutdown
-process.on("SIGINT", () => {
+process.on("SIGINT", async () => {
   console.log("Shutting down...");
-
+  if (playItService.tunnelStatus !== "stopped") {
+    console.log("Stopping PlayIt service...");
+    try {
+      await playItService.stop();
+    } catch (err) {
+      console.error("Error stopping PlayIt:", err);
+    }
+  }
   if (mcProcess) {
     console.log("Stopping Minecraft server...");
     mcProcess.write("stop\r");
