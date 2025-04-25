@@ -15,6 +15,7 @@ import systemUsage from "./utils/system-usage.js";
 import { PlayItService } from "./utils/PlayitServiceProvider.js";
 import MinecraftProperties from "./utils/mcPropertise.js";
 import fs from "node:fs";
+import {router as ngrokRouter} from "./controller/ngrok.js"
 
 const app = express();
 const server = createServer(app);
@@ -40,6 +41,7 @@ app.use("/api", filesRoute);
 app.use("/api", pluginRoute);
 app.use("/api", worldRoute);
 app.use("/api", versionRoute);
+app.use("/api", ngrokRouter);
 initFileWatcher(io);
 
 const playItService = new PlayItService({

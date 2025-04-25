@@ -9,6 +9,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@ngrok/ngrok": "^1.5.0",
     "adm-zip": "^0.5.16",
     "axios": "^1.8.4",
     "chokidar": "^4.0.3",

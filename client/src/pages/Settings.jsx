@@ -4,7 +4,7 @@ import axios from "axios";
 const Settings = () => {
   const [config, setConfig] = useState([
     { name: "startup", value: "java -jar server.jar" },
-    { name: "enabled", value: true },
+    { name: "ngrokToken", value: "" },
   ]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
@@ -27,11 +27,11 @@ const Settings = () => {
             value: response.data.startup || "java -jar server.jar",
           },
           {
-            name: "enabled",
+            name: "ngrokToken",
             value:
-              response.data.enabled !== undefined
-                ? response.data.enabled
-                : true,
+              response.data.ngrokToken !== undefined
+                ? response.data.ngrokToken
+                : "",
           },
         ];
         setConfig(formattedConfig);
@@ -50,9 +50,9 @@ const Settings = () => {
     setConfig(newConfig);
   };
 
-  const toggleEnabled = () => {
+  const handleTokenChange = (e) => {
     const newConfig = [...config];
-    newConfig[1].value = !newConfig[1].value;
+    newConfig[1].value = e.target.value;
     setConfig(newConfig);
   };
 
@@ -64,7 +64,7 @@ const Settings = () => {
       // Convert our array format to object format for API
       const configObject = {
         startup: config[0].value,
-        enabled: config[1].value,
+        ngrokToken: config[1].value,
       };
 
       await axios.post("/api/config", configObject);
@@ -108,27 +108,20 @@ const Settings = () => {
           />
         </div>
 
-        {/* Toggle Switch */}
+        {/* Ngrok token */}
         <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
           <div>
-            <p className="font-medium text-gray-700">Enable Service</p>
+            <p className="font-medium text-gray-700">Ngrok Token</p>
             <p className="text-sm text-gray-500">
-              Automatically start the service on boot
+              enter your Ngrok token
             </p>
           </div>
-
-          <button
-            onClick={toggleEnabled}
-            className={`relative inline-flex h-6 w-12 items-center rounded-full transition-colors ${
-              config[1].value ? "bg-blue-600" : "bg-gray-200"
-            }`}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-                config[1].value ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
+         <input
+         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px] font-mono text-sm"
+         value={config[1].value}
+         onChange={handleTokenChange} 
+         />
+          
         </div>
       </div>
 

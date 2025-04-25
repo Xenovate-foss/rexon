@@ -95,7 +95,7 @@ const SidebarContent = () => {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-200">
           {(!isCollapsed || isMobile) && (
-            <h1 className="text-xl font-bold">Dashboard</h1>
+            <h1 className="text-xl font-bold">Rexon</h1>
           )}
           <button
             onClick={toggleSidebar}
@@ -138,6 +138,9 @@ const SidebarContent = () => {
             ))}
           </ul>
         </div>
+      <div className="bg-gray-900 text-white rounded-x-5 px-5 w-full">
+        <p>Rexon - v0.01.0(lotus)</p>
+      </div>
       </div>
 
       {/* Main Content */}
@@ -146,7 +149,7 @@ const SidebarContent = () => {
           <div className="flex items-center mb-6">
             {isMobile && (
               <button
-                className="mr-4 p-2 rounded-lg bg-black text-white hover:bg-blue-600 transition-colors"
+                className="mr-4 p-2 rounded-tr-lg rounded-tl-lg bg-black text-white hover:bg-blue-600 transition-colors"
                 onClick={toggleSidebar}
               >
                 <Menu size={20} />
