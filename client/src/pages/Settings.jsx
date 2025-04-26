@@ -109,19 +109,22 @@ const Settings = () => {
         </div>
 
         {/* Ngrok token */}
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div>
-            <p className="font-medium text-gray-700">Ngrok Token</p>
-            <p className="text-sm text-gray-500">
-              enter your Ngrok token
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Ngrok Token
+          </label>
+          <div className="space-y-2">
+            <input
+              type="text"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              value={config[1].value}
+              onChange={handleTokenChange}
+              placeholder="Enter your Ngrok token"
+            />
+            <p className="text-xs text-gray-500">
+              Enter your Ngrok authentication token for public URL access
             </p>
           </div>
-         <input
-         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[80px] font-mono text-sm"
-         value={config[1].value}
-         onChange={handleTokenChange} 
-         />
-          
         </div>
       </div>
 

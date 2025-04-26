@@ -158,10 +158,6 @@ function addToHistory(command, output) {
   }
 }
 
-app.get("*view", (req, res) => {
-  res.sendFile(path.resolve(__dirname, "app/index.html"));
-});
-
 function formatHistoryForTerminal() {
   if (commandHistory.length === 0) return "";
   return commandHistory.map((e) => `\r ${e.output}`).join("");
@@ -230,6 +226,10 @@ app.get("/api/health", async (req, res) => {
 });
 
 app.use(configRoute);
+
+app.get("*view", (req, res) => {
+  res.sendFile(path.resolve(__dirname, "app/index.html"));
+});
 
 // Socket.IO
 io.on("connection", (socket) => {
