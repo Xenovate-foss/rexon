@@ -197,9 +197,15 @@ const XTerminal = () => {
       }
     });
 
-    socketRef.current.on("server:history", (h) => {
-      if (terminal.current) {
-        terminal.current.write(h);
+    socketRef.current.on("server:history", (history) => {
+      if (terminal.current && Array.isArray(history)) {
+        // Format history entries properly
+        history.forEach((entry) => {
+          if (entry.output) {
+            terminal.current.write(entry.output);
+          }
+        });
+        terminal.current.write("\r\n\x1b[36m> \x1b[0m");
       }
     });
 
@@ -209,8 +215,9 @@ const XTerminal = () => {
       }
     });
 
-    socketRef.current.on("server:status", (s) => {
-      setIsServerOnline(s);
+    socketRef.current.on("server:status", (status) => {
+      console.log("Server status update:", status); // Add logging
+      setIsServerOnline(!!status); // Convert to boolean explicitly
     });
 
     socketRef.current.on("disconnect", (reason) => {
@@ -373,7 +380,7 @@ const XTerminal = () => {
         </button>
         <div className="flex items-center ml-2">
           <div
-            className={`w-3 h-3 rounded-full mr-2 ${
+            className={`w-3 h-3 rounded-full outline-2 outline-offset-2 mr-2 ${
               isConnected ? "bg-green-500" : "bg-red-500"
             }`}
           ></div>

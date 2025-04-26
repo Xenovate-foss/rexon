@@ -79,7 +79,7 @@ const FileBrowser = () => {
       const response = await axios.get(
         `/api/files?path=${encodeURIComponent(path)}`
       );
-      setFiles(response.data);
+      setFiles(response.data || []);
       setError(null);
     } catch (err) {
       setError(err.response?.data?.error || "Failed to fetch files");

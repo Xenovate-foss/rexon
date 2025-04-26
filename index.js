@@ -15,7 +15,16 @@ import systemUsage from "./utils/system-usage.js";
 import { PlayItService } from "./utils/PlayitServiceProvider.js";
 import MinecraftProperties from "./utils/mcPropertise.js";
 import fs from "node:fs";
-import {router as ngrokRouter} from "./controller/ngrok.js"
+import { router as ngrokRouter } from "./controller/ngrok.js";
+import path from "node:path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+if (!fs.existsSync("./server")) {
+  fs.mkdir("./server");
+}
 
 const app = express();
 const server = createServer(app);
@@ -23,7 +32,7 @@ const io = new Server(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"],
-    credentials: true,
+    credentials: false,
   },
   pingTimeout: 60000,
   pingInterval: 25000,
@@ -32,6 +41,7 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(expressFileUpload());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static("./app"));
 
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url} - ${req.ip}`);
@@ -48,7 +58,7 @@ const playItService = new PlayItService({
   minecraftPort:
     MinecraftProperties.parse(
       fs.readFileSync("./server/server.properties", "utf-8")
-    ) || 25565,
+    )["server-port"] || 25565,
   autoRestart: true,
   maxRestartAttempts: 3,
   useSystemd: config.useSystemd,
@@ -141,12 +151,16 @@ const isServerOnline = () => mcProcess !== null;
 
 // History utils
 function addToHistory(command, output) {
-  const entry = { output };
+  const entry = { command, output }; // Make sure command is stored
   commandHistory.unshift(entry);
   if (commandHistory.length > MAX_HISTORY_LENGTH) {
     commandHistory.pop();
   }
 }
+
+app.get("*view", (req, res) => {
+  res.sendFile(path.resolve(__dirname, "app/index.html"));
+});
 
 function formatHistoryForTerminal() {
   if (commandHistory.length === 0) return "";
@@ -197,15 +211,6 @@ function executeCommand(cmd) {
 }
 
 // Routes
-app.get("/", (req, res) => {
-  res.json({
-    success: true,
-    message: "Minecraft server management service is up and running",
-    ip: req.ip || req.headers["x-forwarded-for"] || req.socket.remoteAddress,
-    serverStatus: isServerOnline() ? "online" : "offline",
-  });
-});
-
 app.get("/api/health", async (req, res) => {
   systemUsage()
     .then((data) => {
@@ -266,7 +271,7 @@ io.on("connection", (socket) => {
         console.log("Error getting system usage:", err);
       });
     // send server status
-    socket.emit("server:status", isServerOnline);
+    socket.emit("server:status", isServerOnline());
   }, 1000); // Update every second instead of every 10ms
 
   // Add event handler for client requesting health data
