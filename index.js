@@ -40,9 +40,11 @@ import MinecraftProperties from "./utils/mcPropertise.js";
 import { router as ngrokRouter } from "./controller/ngrok.js";
 import path from "node:path";
 import { fileURLToPath } from "url";
+import jdkRoute from "./controller/jdkInstaller/router.js"
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+let isSetup = fs.existsSync(".setup");
 
 const app = express();
 const server = createServer(app);
@@ -60,11 +62,14 @@ app.use(express.json());
 app.use(expressFileUpload());
 app.use(express.urlencoded({ extended: true }));
 
-if (fs.existsSync(".setup")) {
+if (isSetup) {
   app.use(express.static("./setup"));
+  fs.unlinkSync(".setup");
+  setTimeout(() => {isSetup = false; console.log("Is set up set to", isSetup); app.use(express.static("./app"));}, 1000)
 } else {
   app.use(express.static("./app"));
 }
+
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url} - ${req.ip}`);
   next();
@@ -75,6 +80,7 @@ app.use("/api", pluginRoute);
 app.use("/api", worldRoute);
 app.use("/api", versionRoute);
 app.use("/api", ngrokRouter);
+app.use("/api", jdkRoute)
 initFileWatcher(io);
 
 const playItService = null; /* new PlayItService({
