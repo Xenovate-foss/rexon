@@ -1,8 +1,31 @@
+import { initializeServerDirectory } from "./utils/initServer.js";
+
+(async () => {
+  await initializeServerDirectory();
+})();
+
 import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { spawn } from "node-pty"; // FIXED: Proper import for node-pty
+import { spawn } from "node-pty";
 import os from "os";
+import fs, { existsSync } from "node:fs";
+
+fs.access("./server", (err) => {
+  if (err) {
+    // Directory doesn't exist, create it
+    fs.mkdir("./server", (err) => {
+      if (err) {
+        console.error("Error creating directory:", err);
+      } else {
+        console.log("Server directory created successfully");
+      }
+    });
+  } else {
+    console.log("Server directory already exists");
+  }
+});
+
 import configRoute from "./controller/settings.js";
 import config from "./config.json" assert { type: "json" };
 import filesRoute from "./controller/files.js";
@@ -14,17 +37,12 @@ import versionRoute from "./controller/version.js";
 import systemUsage from "./utils/system-usage.js";
 import { PlayItService } from "./utils/PlayitServiceProvider.js";
 import MinecraftProperties from "./utils/mcPropertise.js";
-import fs from "node:fs";
 import { router as ngrokRouter } from "./controller/ngrok.js";
 import path from "node:path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-if (!fs.existsSync("./server")) {
-  fs.mkdir("./server");
-}
 
 const app = express();
 const server = createServer(app);
@@ -41,12 +59,17 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(expressFileUpload());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static("./app"));
 
+if (fs.existsSync(".setup")) {
+  app.use(express.static("./setup"));
+} else {
+  app.use(express.static("./app"));
+}
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url} - ${req.ip}`);
   next();
 });
+
 app.use("/api", filesRoute);
 app.use("/api", pluginRoute);
 app.use("/api", worldRoute);
@@ -54,7 +77,7 @@ app.use("/api", versionRoute);
 app.use("/api", ngrokRouter);
 initFileWatcher(io);
 
-const playItService = new PlayItService({
+const playItService = null; /* new PlayItService({
   minecraftPort:
     MinecraftProperties.parse(
       fs.readFileSync("./server/server.properties", "utf-8")
@@ -140,7 +163,7 @@ app.post("/api/playit/update", async (req, res) => {
     restartRequested: !!req.body.restart,
     restartResult: startResult,
   });
-});
+});*/
 let commandHistory = [];
 const MAX_HISTORY_LENGTH = 1000;
 const serverFolder = "./server/";
