@@ -1,5 +1,5 @@
 import ngrok from '@ngrok/ngrok';
-import config from "../config.json" assert {type: "json"};
+import config from "../config.json" with {type: "json"};
 import mcProperties from "../utils/mcPropertise.js";
 import express from 'express';
 import fs from 'fs';

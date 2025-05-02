@@ -13,7 +13,7 @@ import expressFileUpload from "express-fileupload";
 // Import routes and utilities
 import { initializeServerDirectory } from "./utils/initServer.js";
 import configRoute from "./controller/settings.js";
-import config from "./config.json" assert { type: "json" };
+import config from "./config.json" with { type: "json" };
 import filesRoute from "./controller/files.js";
 import { initFileWatcher } from "./utils/fileWatcher.js";
 import pluginRoute from "./controller/plugin.js";
