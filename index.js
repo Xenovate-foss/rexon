@@ -24,6 +24,7 @@ import { PlayItService } from "./utils/PlayitServiceProvider.js";
 import MinecraftProperties from "./utils/mcPropertise.js";
 import { router as ngrokRouter } from "./controller/ngrok.js";
 import jdkRoute from "./controller/jdkInstaller/router.js";
+import { createPlayItRouter } from "./controller/playit/router.js";
 
 // Constants
 const __filename = fileURLToPath(import.meta.url);
@@ -61,65 +62,7 @@ async function initialize() {
     }
   } catch (err) {
     console.error("Initialization error:", err);
-  }
-}
-
-/**
- * Initialize PlayIt service for external connections
- */
-function initializePlayItService() {
-  try {
-    const serverPropertiesPath = path.join(SERVER_FOLDER, "server.properties");
-    
-    if (existsSync(serverPropertiesPath)) {
-      const serverProperties = fs.readFileSync(serverPropertiesPath, "utf-8");
-      const parsedProperties = MinecraftProperties.parse(serverProperties);
-      const minecraftPort = parsedProperties["server-port"] || 25565;
-      
-      playItService = new PlayItService({
-        minecraftPort,
-        autoRestart: true,
-        maxRestartAttempts: 3,
-        useSystemd: config.useSystemd,
-        sudoPassword: config.sudoPassword || null,
-      });
-      
-      setupPlayItEventHandlers();
-    } else {
-      console.log("Server properties file not found, PlayIt service will be initialized later");
-    }
-  } catch (err) {
-    console.error("Error initializing PlayIt service:", err);
-  }
-}
-
-/**
- * Set up event handlers for PlayIt service
- */
-function setupPlayItEventHandlers() {
-  if (!playItService) return;
-  
-  playItService.on("log", (log) => {
-    io.emit("playit:log", { log });
-    console.log(`[${log.timestamp}] [${log.type}] ${log.message}`);
-  });
-
-  playItService.on("status_change", ({ status }) => {
-    io.emit("playit:status", { status });
-    console.log(`PlayIt status changed to: ${status}`);
-  });
-
-  playItService.on("tunnel_created", ({ url }) => {
-    io.emit("playit:tunnel", { url });
-    console.log(`🎮 Minecraft server accessible at: ${url}`);
-  });
-
-  playItService.on("auth_required", ({ url }) => {
-    io.emit("playit:auth_required", { url });
-    console.log(`⚠️ PlayIt authentication required: ${url}`);
-  });
-}
-
+  }}
 // Setup Express app and HTTP server
 const app = express();
 const server = createServer(app);
@@ -177,6 +120,7 @@ app.use("/api", worldRoute);
 app.use("/api", versionRoute);
 app.use("/api", ngrokRouter);
 app.use("/api", jdkRoute);
+app.use("/api"Irio)
 app.use(configRoute);
 
 // Health check endpoint

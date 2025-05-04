@@ -12,11 +12,16 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api/": "/",
+      "/api/": "https://pz4fs8-3000.csb.app/",
       "/socket.io": {
-        target: "/", // Your Socket.io server address
+        target: "https://pz4fs8-3000.csb.app/", // Your Socket.io server address
         changeOrigin: true,
         ws: true, // Important: This enables WebSocket proxying
+      },
+      "/playit": {
+        target: "https://pz4fs8-3000.csb.app/",
+        changeOrigin: true,
+        ws: true,
       },
     },
   },
