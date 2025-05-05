@@ -12,6 +12,10 @@ import {
   ExternalLink,
   Loader,
   Server,
+  StopCircle,
+  MessageSquare,
+  X,
+  Check,
 } from "lucide-react";
 
 // Component styles
@@ -25,6 +29,7 @@ const styles = {
   primaryButton: "bg-blue-500 text-white hover:bg-blue-600",
   secondaryButton: "bg-gray-200 text-gray-700 hover:bg-gray-300",
   dangerButton: "bg-red-500 text-white hover:bg-red-600",
+  stopButton: "bg-orange-500 text-white hover:bg-orange-600",
   buttonGroup: "flex flex-wrap gap-3 mb-4",
   infoBox: "bg-blue-50 border border-blue-200 p-4 rounded-md mb-4",
   warningBox: "bg-yellow-50 border border-yellow-200 p-4 rounded-md mb-4",
@@ -49,6 +54,15 @@ const styles = {
   claimUrl: "text-blue-500 hover:underline flex items-center gap-1",
   badgeContainer: "flex items-center gap-2 mb-4",
   badge: "px-2 py-1 rounded-full text-xs font-medium",
+  notification:
+    "fixed bottom-4 right-4 p-4 rounded-md shadow-lg transition-opacity flex items-center gap-2 max-w-xs z-50",
+  statsSummary: "flex flex-wrap gap-4 mb-4 p-3 bg-gray-50 rounded-md",
+  statItem: "flex flex-col",
+  statValue: "text-xl font-semibold",
+  statLabel: "text-xs text-gray-500",
+  filterSection: "mb-4 flex items-center gap-2",
+  searchInput:
+    "px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 flex-grow",
 };
 
 /**
@@ -74,31 +88,38 @@ const PlayItClient = () => {
     tunnels: false,
     reset: false,
     version: false,
+    start: false,
+    stop: false,
   });
   const [error, setError] = useState(null);
   const [eventLog, setEventLog] = useState([]);
+  const [notification, setNotification] = useState(null);
+  const [filterText, setFilterText] = useState("");
 
   // Initialize Socket.IO connection
   useEffect(() => {
     const newSocket = io("/playit", {
-      path: "/api/socket.io", // Adjust if your Socket.IO path is different
+      path: "/socket.io", // Adjust if your Socket.IO path is different
     });
 
     // Connection events
     newSocket.on("connect", () => {
       setConnected(true);
       logEvent("info", "Connected to PlayIt service");
+      showNotification("success", "Connected to PlayIt service");
     });
 
     newSocket.on("disconnect", () => {
       setConnected(false);
       logEvent("info", "Disconnected from PlayIt service");
+      showNotification("error", "Disconnected from PlayIt service");
     });
 
     newSocket.on("connect_error", (err) => {
       setConnected(false);
       setError(`Connection error: ${err.message}`);
       logEvent("error", `Connection error: ${err.message}`);
+      showNotification("error", `Connection error: ${err.message}`);
     });
 
     // PlayIt events
@@ -106,6 +127,7 @@ const PlayItClient = () => {
       setClaim(data);
       setLoading((prev) => ({ ...prev, login: false }));
       logEvent("info", `Claim code generated: ${data.claim}`);
+      showNotification("info", "Claim code generated");
     });
 
     newSocket.on("exchanging", (claimCode) => {
@@ -115,26 +137,39 @@ const PlayItClient = () => {
     newSocket.on("secret", (data) => {
       setSecret(data);
       logEvent("success", `Secret key obtained at path: ${data.path}`);
+      showNotification("success", "Secret key obtained");
     });
 
     newSocket.on("tunnels", (data) => {
       setTunnels(Array.isArray(data) ? data : []);
       setLoading((prev) => ({ ...prev, tunnels: false }));
       logEvent("info", `Received tunnels data: ${data.length} tunnels`);
+      showNotification("info", `Received ${data.length} tunnels`);
     });
 
     newSocket.on("starting", () => {
       setStatus("starting");
       logEvent("info", "PlayIt agent is starting");
+      showNotification("info", "PlayIt agent is starting");
+    });
+
+    newSocket.on("running", () => {
+      setStatus("running");
+      setLoading((prev) => ({ ...prev, start: false }));
+      logEvent("success", "PlayIt agent is running");
+      showNotification("success", "PlayIt agent is running");
     });
 
     newSocket.on("stopped", (exitCode) => {
       setStatus("stopped");
+      setLoading((prev) => ({ ...prev, stop: false }));
       logEvent("info", `PlayIt agent stopped with exit code: ${exitCode}`);
+      showNotification("info", `PlayIt agent stopped`);
     });
 
     newSocket.on("resetting", () => {
       logEvent("warning", "Resetting PlayIt configuration");
+      showNotification("warning", "Resetting PlayIt configuration");
     });
 
     newSocket.on("reset-complete", (exitCode) => {
@@ -142,6 +177,7 @@ const PlayItClient = () => {
       setSecret(null);
       setLoading((prev) => ({ ...prev, reset: false }));
       logEvent("success", `Reset completed with exit code: ${exitCode}`);
+      showNotification("success", "Reset completed");
     });
 
     newSocket.on("secret-path", (path) => {
@@ -165,12 +201,16 @@ const PlayItClient = () => {
         tunnels: false,
         reset: false,
         version: false,
+        start: false,
+        stop: false,
       });
       logEvent("error", `Error: ${errorMessage}`);
+      showNotification("error", errorMessage);
     });
 
     newSocket.on("warning", (warningMessage) => {
       logEvent("warning", `Warning: ${warningMessage}`);
+      showNotification("warning", warningMessage);
     });
 
     setSocket(newSocket);
@@ -190,6 +230,18 @@ const PlayItClient = () => {
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     logEvent("info", "Copied to clipboard");
+    showNotification("success", "Copied to clipboard", 2000);
+  };
+
+  const showNotification = (type, message, duration = 5000) => {
+    setNotification({ type, message });
+
+    // Clear notification after duration
+    if (duration) {
+      setTimeout(() => {
+        setNotification(null);
+      }, duration);
+    }
   };
 
   // API calls
@@ -205,6 +257,7 @@ const PlayItClient = () => {
       setError(err.response?.data?.error || err.message);
       setLoading((prev) => ({ ...prev, login: false }));
       logEvent("error", `Login error: ${err.message}`);
+      showNotification("error", `Login error: ${err.message}`);
     }
   }, []);
 
@@ -213,12 +266,44 @@ const PlayItClient = () => {
     setError(null);
 
     try {
-      await axios.get("/api/playit/tunnels");
-      logEvent("info", "Requesting tunnels information");
+      const data = await axios.get("/api/playit/tunnels");
+
+      logEvent("info", JSON.stringify(data.data));
     } catch (err) {
       setError(err.response?.data?.error || err.message);
       setLoading((prev) => ({ ...prev, tunnels: false }));
       logEvent("error", `Tunnels error: ${err.message}`);
+      showNotification("error", `Tunnels error: ${err.message}`);
+    }
+  }, []);
+
+  const startPlayit = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, start: true }));
+    setError(null);
+
+    try {
+      await axios.post("/api/playit/start");
+      logEvent("info", "Requesting to start PlayIt agent");
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+      setLoading((prev) => ({ ...prev, start: false }));
+      logEvent("error", `Starting error: ${err.message}`);
+      showNotification("error", `Starting error: ${err.message}`);
+    }
+  }, []);
+
+  const stopPlayit = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, stop: true }));
+    setError(null);
+
+    try {
+      await axios.post("/api/playit/stop");
+      logEvent("info", "Requesting to stop PlayIt agent");
+    } catch (err) {
+      setError(err.response?.data?.error || err.message);
+      setLoading((prev) => ({ ...prev, stop: false }));
+      logEvent("error", `Stopping error: ${err.message}`);
+      showNotification("error", `Stopping error: ${err.message}`);
     }
   }, []);
 
@@ -241,6 +326,7 @@ const PlayItClient = () => {
       setError(err.response?.data?.error || err.message);
       setLoading((prev) => ({ ...prev, reset: false }));
       logEvent("error", `Reset error: ${err.message}`);
+      showNotification("error", `Reset error: ${err.message}`);
     }
   }, []);
 
@@ -255,6 +341,7 @@ const PlayItClient = () => {
       setError(err.response?.data?.error || err.message);
       setLoading((prev) => ({ ...prev, version: false }));
       logEvent("error", `Version error: ${err.message}`);
+      showNotification("error", `Version error: ${err.message}`);
     }
   }, []);
 
@@ -265,6 +352,26 @@ const PlayItClient = () => {
       getTunnels();
     }
   }, [connected, getVersion, getTunnels]);
+
+  // Filter tunnels based on search text
+  const filteredTunnels = tunnels.filter((tunnel) => {
+    const searchText = filterText.toLowerCase();
+    return (
+      (tunnel.name && tunnel.name.toLowerCase().includes(searchText)) ||
+      (tunnel.domain && tunnel.domain.toLowerCase().includes(searchText)) ||
+      (tunnel.proto && tunnel.proto.toLowerCase().includes(searchText)) ||
+      (tunnel.status && tunnel.status.toLowerCase().includes(searchText))
+    );
+  });
+
+  // Statistics
+  const stats = {
+    total: tunnels.length,
+    online: tunnels.filter((t) => t.status === "online").length,
+    offline: tunnels.filter((t) => t.status !== "online").length,
+    http: tunnels.filter((t) => t.proto === "http").length,
+    https: tunnels.filter((t) => t.proto === "https").length,
+  };
 
   // Render helper functions
   const renderStatusBadge = () => {
@@ -289,6 +396,41 @@ const PlayItClient = () => {
       <span className={`${styles.badge} bg-red-300 text-red-800`}>
         Disconnected
       </span>
+    );
+  };
+
+  const renderNotification = () => {
+    if (!notification) return null;
+
+    const notificationStyles = {
+      success: "bg-green-100 text-green-800 border-green-300",
+      error: "bg-red-100 text-red-800 border-red-300",
+      warning: "bg-yellow-100 text-yellow-800 border-yellow-300",
+      info: "bg-blue-100 text-blue-800 border-blue-300",
+    };
+
+    const iconMap = {
+      success: <Check size={18} className="text-green-600" />,
+      error: <X size={18} className="text-red-600" />,
+      warning: <AlertCircle size={18} className="text-yellow-600" />,
+      info: <Info size={18} className="text-blue-600" />,
+    };
+
+    return (
+      <div
+        className={`${styles.notification} ${
+          notificationStyles[notification.type]
+        }`}
+      >
+        {iconMap[notification.type]}
+        <span>{notification.message}</span>
+        <button
+          onClick={() => setNotification(null)}
+          className="ml-2 text-gray-500 hover:text-gray-700"
+        >
+          <X size={16} />
+        </button>
+      </div>
     );
   };
 
@@ -337,6 +479,32 @@ const PlayItClient = () => {
               <Play size={18} />
             )}
             Login
+          </button>
+
+          <button
+            className={`${styles.button} ${styles.primaryButton}`}
+            onClick={startPlayit}
+            disabled={loading.start || status === "running"}
+          >
+            {loading.start ? (
+              <Loader size={18} className={styles.loadingSpinner} />
+            ) : (
+              <Play size={18} />
+            )}
+            Start
+          </button>
+
+          <button
+            className={`${styles.button} ${styles.stopButton}`}
+            onClick={stopPlayit}
+            disabled={loading.stop || status !== "running"}
+          >
+            {loading.stop ? (
+              <Loader size={18} className={styles.loadingSpinner} />
+            ) : (
+              <StopCircle size={18} />
+            )}
+            Stop
           </button>
 
           <button
@@ -446,83 +614,123 @@ const PlayItClient = () => {
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>
             <List size={18} />
-            Tunnels ({tunnels.length})
+            Tunnels
           </h2>
 
+          <div className={styles.statsSummary}>
+            <div className={styles.statItem}>
+              <span className={styles.statValue}>{stats.total}</span>
+              <span className={styles.statLabel}>Total</span>
+            </div>
+            <div className={styles.statItem}>
+              <span className={styles.statValue}>{stats.online}</span>
+              <span className={styles.statLabel}>Online</span>
+            </div>
+            <div className={styles.statItem}>
+              <span className={styles.statValue}>{stats.offline}</span>
+              <span className={styles.statLabel}>Offline</span>
+            </div>
+            <div className={styles.statItem}>
+              <span className={styles.statValue}>{stats.http}</span>
+              <span className={styles.statLabel}>HTTP</span>
+            </div>
+            <div className={styles.statItem}>
+              <span className={styles.statValue}>{stats.https}</span>
+              <span className={styles.statLabel}>HTTPS</span>
+            </div>
+          </div>
+
+          <div className={styles.filterSection}>
+            <MessageSquare size={18} className="text-gray-500" />
+            <input
+              type="text"
+              className={styles.searchInput}
+              placeholder="Filter tunnels..."
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+            />
+          </div>
+
           <div className={styles.tunnelGrid}>
-            {tunnels.map((tunnel, index) => (
-              <div key={index} className={styles.tunnelCard}>
-                <div className={styles.tunnelInfo}>
-                  <span className={styles.tunnelLabel}>ID:</span>
-                  <span className={styles.tunnelValue}>
-                    {tunnel.id || "N/A"}
-                  </span>
-                </div>
-
-                <div className={styles.tunnelInfo}>
-                  <span className={styles.tunnelLabel}>Name:</span>
-                  <span className={styles.tunnelValue}>
-                    {tunnel.name || "Unnamed"}
-                  </span>
-                </div>
-
-                {tunnel.proto && (
+            {filteredTunnels.length > 0 ? (
+              filteredTunnels.map((tunnel, index) => (
+                <div key={index} className={styles.tunnelCard}>
                   <div className={styles.tunnelInfo}>
-                    <span className={styles.tunnelLabel}>Protocol:</span>
-                    <span className={styles.tunnelValue}>{tunnel.proto}</span>
+                    <span className={styles.tunnelLabel}>ID:</span>
+                    <span className={styles.tunnelValue}>
+                      {tunnel.id || "N/A"}
+                    </span>
                   </div>
-                )}
 
-                {tunnel.domain && (
                   <div className={styles.tunnelInfo}>
-                    <span className={styles.tunnelLabel}>Domain:</span>
-                    <div className="flex items-center gap-1">
-                      <a
-                        href={`http${tunnel.proto === "https" ? "s" : ""}://${
-                          tunnel.domain
-                        }`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={styles.claimUrl}
-                      >
-                        {tunnel.domain} <ExternalLink size={14} />
-                      </a>
-                      <span
-                        className={styles.copyButton}
-                        onClick={() => copyToClipboard(tunnel.domain)}
-                        title="Copy to clipboard"
-                      >
-                        <Clipboard size={16} />
+                    <span className={styles.tunnelLabel}>Name:</span>
+                    <span className={styles.tunnelValue}>
+                      {tunnel.name || "Unnamed"}
+                    </span>
+                  </div>
+
+                  {tunnel.proto && (
+                    <div className={styles.tunnelInfo}>
+                      <span className={styles.tunnelLabel}>Protocol:</span>
+                      <span className={styles.tunnelValue}>{tunnel.proto}</span>
+                    </div>
+                  )}
+
+                  {tunnel.domain && (
+                    <div className={styles.tunnelInfo}>
+                      <span className={styles.tunnelLabel}>Domain:</span>
+                      <div className="flex items-center gap-1">
+                        <a
+                          href={`http${tunnel.proto === "https" ? "s" : ""}://${
+                            tunnel.domain
+                          }`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.claimUrl}
+                        >
+                          {tunnel.domain} <ExternalLink size={14} />
+                        </a>
+                        <span
+                          className={styles.copyButton}
+                          onClick={() => copyToClipboard(tunnel.domain)}
+                          title="Copy to clipboard"
+                        >
+                          <Clipboard size={16} />
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {tunnel.local_port && (
+                    <div className={styles.tunnelInfo}>
+                      <span className={styles.tunnelLabel}>Local Port:</span>
+                      <span className={styles.tunnelValue}>
+                        {tunnel.local_port}
                       </span>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {tunnel.local_port && (
-                  <div className={styles.tunnelInfo}>
-                    <span className={styles.tunnelLabel}>Local Port:</span>
-                    <span className={styles.tunnelValue}>
-                      {tunnel.local_port}
-                    </span>
-                  </div>
-                )}
-
-                {tunnel.status && (
-                  <div className={styles.tunnelInfo}>
-                    <span className={styles.tunnelLabel}>Status:</span>
-                    <span
-                      className={`${styles.badge} ${
-                        tunnel.status === "online"
-                          ? "bg-green-300 text-green-800"
-                          : "bg-red-300 text-red-800"
-                      }`}
-                    >
-                      {tunnel.status}
-                    </span>
-                  </div>
-                )}
+                  {tunnel.status && (
+                    <div className={styles.tunnelInfo}>
+                      <span className={styles.tunnelLabel}>Status:</span>
+                      <span
+                        className={`${styles.badge} ${
+                          tunnel.status === "online"
+                            ? "bg-green-300 text-green-800"
+                            : "bg-red-300 text-red-800"
+                        }`}
+                      >
+                        {tunnel.status}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="col-span-2 text-center p-4 text-gray-500">
+                No tunnels match your filter criteria
               </div>
-            ))}
+            )}
           </div>
         </section>
       )}
@@ -557,6 +765,8 @@ const PlayItClient = () => {
           )}
         </div>
       </section>
+
+      {renderNotification()}
     </div>
   );
 };

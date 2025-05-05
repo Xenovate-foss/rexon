@@ -25,13 +25,14 @@ import MinecraftProperties from "./utils/mcPropertise.js";
 import { router as ngrokRouter } from "./controller/ngrok.js";
 import jdkRoute from "./controller/jdkInstaller/router.js";
 import { createPlayItRouter } from "./controller/playit/router.js";
+import { isObject } from "node:util";
 
 // Constants
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const SERVER_FOLDER = "./server/";
 const MAX_HISTORY_LENGTH = 1000;
-const PORT = process.env.PORT || 3000;
+let PORT = process.env.PORT || 3000 || 3001;
 
 // Global variables
 let mcProcess = null;
@@ -120,7 +121,7 @@ app.use("/api", worldRoute);
 app.use("/api", versionRoute);
 app.use("/api", ngrokRouter);
 app.use("/api", jdkRoute);
-app.use("/api"Irio)
+app.use("/api", createPlayItRouter(io))
 app.use(configRoute);
 
 // Health check endpoint
@@ -471,12 +472,23 @@ initFileWatcher(io);
 
 // Start the application
 initialize().then(() => {
+  try {
   // Start HTTP server
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Minecraft Manager running at http://0.0.0.0:${PORT}`);
     console.log(`Socket.IO server with CORS enabled`);
   });
+} catch (err) {
+  console.warn("something went wrong ", err)
+  PORT += Math.floor(Math.random() * 10) + 1;
+  console.warn("Trying PORT: ", PORT)
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Minecraft Manager running at http://0.0.0.0:${PORT}`);
+    console.log(`Socket.IO server with CORS enabled`);
+  });
+}
 }).catch(err => {
   console.error("Failed to initialize application:", err);
   process.exit(1);
 });
+

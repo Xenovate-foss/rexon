@@ -1,4 +1,4 @@
-import PlayItClient from "./v4";
+import PlayItClient from "./v4.js";
 import { Router } from "express";
 
 // Create a router function that takes a Socket.IO instance
@@ -59,6 +59,11 @@ export function createPlayItRouter(io) {
       console.log("Version requested via socket");
       playit.getVersion();
     });
+
+    socket.on("start", () => {
+      console.log("Start requested via socket");
+      playit.start();
+    });
   });
 
   // REST API endpoints for direct HTTP access
@@ -77,12 +82,15 @@ export function createPlayItRouter(io) {
   });
 
   // Get tunnels endpoint
-  router.get("/playit/tunnels", (req, res) => {
+  router.get("/playit/tunnels", async (req, res) => {
     console.log("Tunnels requested via HTTP");
-    playit.getTunnels();
+    let data = await playit.listTunnels();
+    console.clear()
+    console.log(data);
     res.json({
       success: true,
       message: "Tunnel request started. Watch for tunnels event via Socket.IO.",
+      data,
     });
   });
 
@@ -105,6 +113,17 @@ export function createPlayItRouter(io) {
       success: true,
       message:
         "Version request started. Watch for version event via Socket.IO.",
+    });
+  });
+
+  // Start endpoint
+  router.post("/playit/start", (req, res) => {
+    console.log("Start requested via HTTP");
+    playit.start();
+    res.json({
+      success: true,
+      message:
+        "Playit start requested. Watch for starting event via Socket.IO.",
     });
   });
 
