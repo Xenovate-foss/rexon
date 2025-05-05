@@ -1,5 +1,5 @@
 
-# Rexon
+# Rexon™
 > **Streamline your self-hosted Minecraft server management with Rexon**
 
 ### What is Rexon?
@@ -16,6 +16,9 @@
 - [x] Settings Panel  
 
 ## Installation
+```JSON
+// May require additional packages to install for node-pty
+```
 
 ### Manual Setup
 1. Clone the repository:  
@@ -64,3 +67,5 @@
 6. Open your browser and go to: [http://localhost:3000](http://localhost:3000)
 
 #### Crafted with 💖 by Xenovate Team 
+
+**Rexon™** is a trademark of Xenovate. The use of this trademark is subject to the terms and conditions set forth by **Xenovate.**
