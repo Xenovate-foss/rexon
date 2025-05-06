@@ -1,12 +1,15 @@
 {
   "name": "Rexon",
-  "version": "1.0.0",
+  "version": "0.01.1",
   "description": "",
   "type": "module",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "start": "node index",
+    "install:jdk:21": "bash controller/jdkInstaller/Unix.sh 21"
+  },
   "keywords": [],
-  "author": "",
+  "author": "Xenovate",
   "license": "ISC",
   "dependencies": {
     "@ngrok/ngrok": "^1.5.0",

@@ -1,3 +1,6 @@
 node_module
 server/*
 controller/playit/bin
+bin
+*bin
+bin*

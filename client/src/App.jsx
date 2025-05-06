@@ -139,7 +139,7 @@ const SidebarContent = () => {
           </ul>
         </div>
       <div className="bg-gray-900 text-white rounded-x-5 px-5 w-full">
-        <p>Rexon - v0.01.0(lotus)</p>
+        <p>Rexon - v0.01.1(lotus)</p>
       </div>
       </div>
 
