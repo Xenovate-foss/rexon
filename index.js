@@ -22,7 +22,14 @@ import versionRoute from "./controller/version.js";
 import systemUsage from "./utils/system-usage.js";
 import { PlayItService } from "./utils/PlayitServiceProvider.js";
 import MinecraftProperties from "./utils/mcPropertise.js";
-import { router as ngrokRouter } from "./controller/ngrok.js";
+let ngrokRouter = null;
+try {
+  const ngrokModule = await import("./controller/ngrok.js");
+  ngrokRouter = ngrokModule.router;
+  console.log("Ngrok router loaded successfully");
+} catch (err) {
+  console.log("Ngrok not available on this architecture, continuing without it");
+}
 import jdkRoute from "./controller/jdkInstaller/router.js";
 import { createPlayItRouter } from "./controller/playit/router.js";
 import { isObject } from "node:util";
@@ -119,7 +126,12 @@ app.use("/api", filesRoute);
 app.use("/api", pluginRoute);
 app.use("/api", worldRoute);
 app.use("/api", versionRoute);
-app.use("/api", ngrokRouter);
+if (ngrokRouter) {
+  app.use("/api", ngrokRouter);
+  console.log("Ngrok router registered");
+} else {
+  console.log("Ngrok router not registered (unsupported architecture)");
+}
 app.use("/api", jdkRoute);
 app.use("/api", createPlayItRouter(io))
 app.use(configRoute);
