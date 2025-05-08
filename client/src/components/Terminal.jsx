@@ -200,9 +200,13 @@ const XTerminal = () => {
     socketRef.current.on("server:history", (history) => {
       if (terminal.current && Array.isArray(history)) {
         // Format history entries properly
-        history.forEach((entry) => {
-          if (entry.output) {
-            terminal.current.write(entry.output);
+        history.forEach((entry, index, array) => {
+          // Process the history array in reverse order
+          const reversedIndex = array.length - 1 - index;
+          const reversedEntry = array[reversedIndex];
+          
+          if (reversedEntry.output) {
+            terminal.current.write(reversedEntry.output);
           }
         });
         terminal.current.write("\r\n\x1b[36m> \x1b[0m");
