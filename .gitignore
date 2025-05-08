@@ -4,3 +4,4 @@ controller/playit/bin
 bin
 *bin
 bin*
+node_modules
