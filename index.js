@@ -8,7 +8,6 @@ import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "url";
-import expressFileUpload from "express-fileupload";
 
 // Import routes and utilities
 import { initializeServerDirectory } from "./utils/initServer.js";
@@ -20,8 +19,6 @@ import pluginRoute from "./controller/plugin.js";
 import worldRoute from "./controller/world.js";
 import versionRoute from "./controller/version.js";
 import systemUsage from "./utils/system-usage.js";
-import { PlayItService } from "./utils/PlayitServiceProvider.js";
-import MinecraftProperties from "./utils/mcPropertise.js";
 let ngrokRouter = null;
 try {
   const ngrokModule = await import("./controller/ngrok.js");
@@ -32,7 +29,6 @@ try {
 }
 import jdkRoute from "./controller/jdkInstaller/router.js";
 import { createPlayItRouter } from "./controller/playit/router.js";
-import { isObject } from "node:util";
 
 // Constants
 const __filename = fileURLToPath(import.meta.url);
@@ -86,7 +82,6 @@ const io = new Server(server, {
 
 // Middleware setup
 app.use(express.json());
-app.use(expressFileUpload());
 app.use(express.urlencoded({ extended: true }));
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.url} - ${req.ip} - ${req.body}`);

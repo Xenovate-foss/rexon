@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import crypto from "crypto"; // For generating unique IDs
 import { isArchiveFileSync } from "../utils/fileType.js";
 import { extractArchive } from "../utils/unarchiver.js";
+import multer from "multer";
 
 const router = Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -63,18 +64,80 @@ function getFileTree(dirPath) {
   });
 }
 
+// Configure multer storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // Get target path from request body or query
+    const targetPath = req.body.path || req.query.path || "/";
+    const absolutePath = getAbsolutePath(targetPath);
+
+    if (!absolutePath) {
+      return cb(new Error("Access denied"), null);
+    }
+
+    // Ensure directory exists
+    if (!fs.existsSync(absolutePath)) {
+      try {
+        fs.mkdirSync(absolutePath, { recursive: true });
+      } catch (err) {
+        return cb(err, null);
+      }
+    }
+
+    cb(null, absolutePath);
+  },
+  filename: (req, file, cb) => {
+    // Keep original filename
+    cb(null, file.originalname);
+  },
+});
+
+// Init multer upload
+const upload = multer({
+  storage,
+  limits: { fileSize: 1 * 1024 * 1024 * 1024 }, // 1GB limit
+});
+
 // Helper to get absolute path
 function getAbsolutePath(relativePath) {
-  const normalizedPath = path
-    .normalize(relativePath)
-    .replace(/^(\.\.(\/|\\|$))+/, "");
-  const absolutePath = path.join(rootDir, normalizedPath);
-
-  if (!absolutePath.startsWith(rootDir)) {
+  // Make sure relativePath is a string
+  if (relativePath === undefined || relativePath === null) {
+    console.error("getAbsolutePath: relativePath is undefined or null");
     return null;
   }
 
-  return absolutePath;
+  // Convert to string in case it's not already
+  const relPathStr = String(relativePath);
+
+  // Handle empty path
+  if (!relPathStr.trim()) {
+    console.error("getAbsolutePath: relativePath is empty");
+    return null;
+  }
+
+  try {
+    const normalizedPath = path
+      .normalize(relPathStr)
+      .replace(/^(\.\.(\/|\\|$))+/, "");
+    const absolutePath = path.join(rootDir, normalizedPath);
+
+    if (!absolutePath.startsWith(rootDir)) {
+      console.error("getAbsolutePath: path is outside root directory", {
+        relPathStr,
+        normalizedPath,
+        absolutePath,
+        rootDir,
+      });
+      return null;
+    }
+
+    return absolutePath;
+  } catch (err) {
+    console.error("Error in getAbsolutePath:", err, {
+      relativePath: relPathStr,
+    });
+    return null;
+  }
 }
 
 // List files in a directory
@@ -279,31 +342,68 @@ router.get("/file/download", (req, res) => {
 
 // Upload a file
 router.post("/file/upload", (req, res) => {
-  try {
-    if (!req.files || !req.files.files) {
-      return res.status(400).json({ error: "No file uploaded" });
+  // Get the path from the request before multer processes it
+  const targetPath = req.query.path || req.body.path || "/";
+
+  // Create a multer instance with dynamic destination
+  const dynamicUpload = multer({
+    storage: multer.diskStorage({
+      destination: (req, file, cb) => {
+        const absolutePath = getAbsolutePath(targetPath);
+
+        if (!absolutePath) {
+          return cb(new Error("Access denied"), null);
+        }
+
+        // Ensure directory exists
+        if (!fs.existsSync(absolutePath)) {
+          try {
+            fs.mkdirSync(absolutePath, { recursive: true });
+          } catch (err) {
+            return cb(err, null);
+          }
+        }
+
+        cb(null, absolutePath);
+      },
+      filename: (req, file, cb) => {
+        // Keep original filename
+        cb(null, file.originalname);
+      },
+    }),
+    limits: { fileSize: 1 * 1024 * 1024 * 1024 }, // 1GB limit
+  }).array("file");
+
+  dynamicUpload(req, res, (err) => {
+    if (err) {
+      console.error("Upload error:", err);
+      return res.status(400).json({
+        success: false,
+        error: err.message,
+      });
     }
 
-    const file = req.files.files;
-    const targetPath = req.body.path || "/";
-    const absolutePath = getAbsolutePath(path.join(targetPath, file.name));
-
-    if (!absolutePath) {
-      return res.status(403).json({ error: "Access denied" });
+    // If no files were uploaded
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "No files uploaded",
+      });
     }
 
-    // Ensure the directory exists
-    const dir = path.dirname(absolutePath);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+    // Files uploaded successfully
+    const fileList = req.files.map((file) => ({
+      name: file.originalname,
+      size: file.size,
+      path: path.relative(rootDir, file.path).replace(/\\/g, "/"),
+    }));
 
-    // Save the file
-    fs.writeFileSync(absolutePath, file.data);
-    res.json({ success: true, message: "File uploaded successfully" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    res.json({
+      success: true,
+      message: `${fileList.length} file(s) uploaded successfully`,
+      files: fileList,
+    });
+  });
 });
 
 // Create a new folder
@@ -400,15 +500,31 @@ router.post("/file/move", (req, res) => {
   }
 });
 
+// Extract archive file
 router.post("/file/unarchive", (req, res) => {
-  const { path } = req.query;
-  let fullPath = `./server/${path}`;
-  if (!path) {
-    return res.status(400).json({ error: true, message: "No path specified" });
-  }
-
   try {
-    const isArchive = isArchiveFileSync(fullPath);
+    // Ensure we're working with a string value
+    const filePath = req.query.path ? String(req.query.path) : null;
+    if (!filePath) {
+      return res
+        .status(400)
+        .json({ error: true, message: "No path specified" });
+    }
+
+    console.log("Unarchiving file path:", filePath);
+
+    const absolutePath = getAbsolutePath(filePath);
+    if (!absolutePath) {
+      return res.status(403).json({ error: true, message: "Access denied" });
+    }
+
+    console.log("Absolute path:", absolutePath);
+
+    if (!fs.existsSync(absolutePath)) {
+      return res.status(404).json({ error: true, message: "File not found" });
+    }
+
+    const isArchive = isArchiveFileSync(absolutePath);
     if (!isArchive) {
       return res
         .status(400)
@@ -416,15 +532,17 @@ router.post("/file/unarchive", (req, res) => {
     }
 
     // Get the directory where the archive is located
-    const archiveDir = fullPath.substring(0, fullPath.lastIndexOf("/"));
+    const archiveDir = path.dirname(absolutePath);
     // Get just the filename without extension
-    const archiveName = fullPath.split("/").pop().split(".")[0];
+    const archiveName = path.basename(absolutePath, path.extname(absolutePath));
     // Create the full extraction path
-    const extractionPath = `${archiveDir}/${archiveName}`;
+    const extractionPath = path.join(archiveDir, archiveName);
 
-    extractArchive(fullPath, extractionPath)
+    console.log("Extracting to:", extractionPath);
+
+    extractArchive(absolutePath, extractionPath)
       .then((data) => {
-        console.log(data);
+        console.log("Extraction successful:", data);
         res.json({ success: true, message: "File extracted successfully" });
       })
       .catch((err) => {

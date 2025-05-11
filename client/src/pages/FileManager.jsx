@@ -25,7 +25,7 @@ import {
   FileArchive,
   X,
 } from "lucide-react";
-
+import { io } from "socket.io-client";
 // Import Ace Editor modes and themes
 import "ace-builds/src-noconflict/mode-javascript";
 import "ace-builds/src-noconflict/mode-html";
@@ -66,10 +66,16 @@ const FileBrowser = () => {
   const [uploadProgress, setUploadProgress] = useState({});
   const [overallProgress, setOverallProgress] = useState(0);
   const fileInputRef = useRef(null);
+  const fileWatcher = useRef(null);
 
   // Fetch files on component mount and when path changes
   useEffect(() => {
     fetchFiles(currentPath);
+    fileWatcher.current = io("/");
+
+    fileWatcher.current.on("file-update", (d) => {
+      fetchFiles(currentPath);
+    });
   }, [currentPath]);
 
   // Fetch files from the server
@@ -88,6 +94,11 @@ const FileBrowser = () => {
       setLoading(false);
     }
   };
+  fileWatcher.current = io("/");
+
+  fileWatcher.current.on("file-update", (d) => {
+    fetchFiles(currentPath);
+  });
 
   // Determine Ace Editor mode based on file extension
   const getEditorMode = (filename) => {
@@ -281,64 +292,83 @@ const FileBrowser = () => {
     // Initialize overall progress
     setOverallProgress(0);
 
+    // Initialize progress tracking for each file
+    const initialProgress = {};
+    uploadFiles.forEach((file) => {
+      initialProgress[file.name] = 0;
+    });
+    setUploadProgress(initialProgress);
+
+    // Track successful uploads
+    let successCount = 0;
+    let totalBytes = 0;
+    let uploadedBytes = 0;
+
+    // Calculate total bytes to upload
+    uploadFiles.forEach((file) => {
+      totalBytes += file.size;
+    });
+
     try {
-      // Create a new FormData instance for all files
-      const formData = new FormData();
+      // Upload files sequentially
+      for (const file of uploadFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("path", currentPath);
 
-      // Append all files to the form data
-      uploadFiles.forEach((file) => {
-        formData.append("files", file); // Using "files" as the field name (ensure your backend expects this)
-      });
+        await axios.post(`/api/file/upload?path=${currentPath}`, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              // Calculate individual file progress
+              const filePercentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
 
-      // Append the current path
-      formData.append("path", currentPath);
+              // Update progress for this specific file
+              setUploadProgress((prev) => ({
+                ...prev,
+                [file.name]: filePercentCompleted,
+              }));
 
-      // Make a single request with all files
-      const response = await axios.post("/api/file/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
+              // Update overall progress based on bytes
+              const currentUploaded = uploadedBytes + progressEvent.loaded;
+              const overallPercent = Math.round(
+                (currentUploaded * 100) / totalBytes
+              );
+              setOverallProgress(overallPercent);
+            }
+          },
+        });
 
-            // Update overall progress
-            setOverallProgress(percentCompleted);
+        // Update counters after successful upload
+        successCount++;
+        uploadedBytes += file.size;
 
-            // Update individual file progress (approximation based on overall progress)
-            const newProgress = {};
-            uploadFiles.forEach((file) => {
-              newProgress[file.name] = percentCompleted;
-            });
-            setUploadProgress(newProgress);
-          }
-        },
-      });
+        // Set this file's progress to 100% to ensure it shows as complete
+        setUploadProgress((prev) => ({
+          ...prev,
+          [file.name]: 100,
+        }));
 
-      // Check response and show success/error
-      if (response.data.error) {
-        setError(response.data.message || "Failed to upload files");
-      } else {
-        // Reset after successful upload
-        setShowUploadModal(false);
-        setUploadFiles([]);
-        setUploadProgress({});
-        setOverallProgress(0);
-        fetchFiles(currentPath);
+        // Update overall progress
+        setOverallProgress(Math.round((uploadedBytes * 100) / totalBytes));
       }
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to upload files");
-      console.error("Upload error:", err);
-    }
-
-    // Reset input field
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      if (overallProgress === 100) {
+        setShowUploadModal(false);
+      }
+      // All files uploaded successfully
+      setUploadMessage(`Successfully uploaded ${successCount} files`);
+      setUploadFiles([]); // Clear the upload queue
+      setShowUploadModal(false);
+    } catch (error) {
+      console.error("Error uploading files:", error);
+      setUploadMessage(`Error: ${error.message || "Failed to upload files"}`);
+      setShowUploadModal(false);
     }
   };
-
   // Create a new folder
   const createFolder = async (e) => {
     e.preventDefault();
